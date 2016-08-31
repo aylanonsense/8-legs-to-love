@@ -2,35 +2,84 @@ pico-8 cartridge // http://www.pico-8.com
 version 8
 __lua__
 
+spider={
+	["x"]=64,
+	["y"]=64,
+	["spun_web_start_point"]=nil,
+	["spun_web_end_point"]=nil,
+	["subpoints_in_spun_web"]=0,
+	["is_spinning_web"]=false,
+	["is_extending_web"]=false
+}
+web_physics={
+	["standard"]={
+		["gravity"]=0.02,
+		["friction"]=0.95,
+		["elasticity"]=1.00,
+		["break_ratio"]=4.00,
+		["force_mult"]=0.2
+	}
+}
+bugs={spider}
 web_points={}
 web_connections={}
+tiles={}
+
+function find_closest_point_not_being_spun(x,y,max_dist)
+	local i
+	local closest_point=nil
+	local closest_point_square_dist=nil
+	for i=1,#web_points do
+		if web_points[i].is_alive and not web_points[i].is_being_spun then
+			local x2=web_points[i].x
+			local y2=web_points[i].y
+			local dx=x2-x
+			local dy=y2-y
+			local square_dist=dx*dx+dy*dy
+			if square_dist <= max_dist*max_dist and (not closest_point or square_dist<closest_point_square_dist) then
+				closest_point=web_points[i]
+				closest_point_square_dist=square_dist
+			end
+		end
+	end
+	return closest_point
+end
 
 next_web_point_id=0
 function create_web_point(x,y,is_fixed)
+	x=mid(0,x,127)
+	y=mid(0,y,127)
 	local pt={
 		["id"]=next_web_point_id,
 		["x"]=x,
 		["y"]=y,
 		["vx"]=0,
 		["vy"]=0,
-		["is_fixed"]=is_fixed
+		["is_fixed"]=is_fixed,
+		["is_alive"]=true,
+		["is_being_spun"]=true,
+		["type"]="standard",
+		["physics"]=web_physics.standard
 	}
 	add(web_points,pt)
 	next_web_point_id+=1
 	return pt
 end
 
-function create_web_connection(pt1,pt2)
-	local dx=pt2.x-pt1.x
-	local dy=pt2.y-pt1.y
-	local len=sqrt(dx*dx+dy*dy)
+function create_web_connection(pt1,pt2,len)
+	if not len then
+		local dx=pt2.x-pt1.x
+		local dy=pt2.y-pt1.y
+		len=max(3,sqrt(dx*dx+dy*dy))
+	end
 
-	local max_elasticity=1.0
-	local break_ratio=3.0
-	local force_mult=0.2
+	local physics=pt1.physics
+	local max_elasticity=physics.elasticity
+	local break_ratio=physics.break_ratio
+	local force_mult=physics.force_mult
 	local starting_length=len/(1+max_elasticity/2)
 
-	add(web_connections,{
+	local conn={
 		["pt1"]=pt1,
 		["pt2"]=pt2,
 		["starting_length"]=starting_length,
@@ -38,8 +87,12 @@ function create_web_connection(pt1,pt2)
 		["break_length"]=break_ratio*starting_length,
 		["max_elasticity"]=max_elasticity,
 		["percent_elasticity_remaining"]=1,
+		["type"]=pt1.type,
+		["physics"]=physics,
 		["force_mult"]=force_mult
-	})
+	}
+	add(web_connections,conn)
+	return conn
 end
 
 function create_web_strand(x1,y1,x2,y2)
@@ -58,18 +111,63 @@ function create_web_strand(x1,y1,x2,y2)
 	create_web_connection(prev_web,end_web)
 end
 
+function load_tiles(map)
+	local r
+	local c
+	for r=1,#map do
+		for c=1,#map[r] do
+			local s=sub(map[r],c,c)
+			if s=="x" then
+				tiles[r][c]={
+					["sprite"]=0,
+					["is_solid"]=true
+				}
+			else
+				tiles[r][c]=false
+			end
+		end
+	end
+end
+
 function _init()
-	create_web_strand(10,50,100,70)
-	create_web_strand(30,30,100,10)
+	local r
+	local c
+	for r=1,16 do
+		tiles[r]={}
+		for c=1,16 do
+			tiles[r][c]=false
+		end
+	end
+	load_tiles({
+		"xxxxxxxxxxxxxxxx",
+		"x          x   x",
+		"x x     x      x",
+		"x   x          x",
+		"x           x  x",
+		"x  x    x      x",
+		"x              x",
+		"x    x     x   x",
+		"x              x",
+		"x         x    x",
+		"x              x",
+		"x              x",
+		"x              x",
+		"x              x",
+		"x              x",
+		"x              x"
+	})
 end
 
 function update_web_point(pt)
 	if not pt.is_fixed then
-		pt.vy+=0.02
+		pt.vy+=pt.physics.gravity
 		pt.x+=pt.vx
 		pt.y+=pt.vy
-		pt.vx*=0.99
-		pt.vy*=0.99
+		pt.vx*=pt.physics.friction
+		pt.vy*=pt.physics.friction
+	end
+	if pt.x>127+20 or pt.x<0-20 or pt.y<0-20 or pt.y>127+20 then
+		pt.is_alive=false
 	end
 end
 
@@ -103,11 +201,105 @@ function update_web_connection(conn)
 	end
 end
 
+function update_spider()
+	if btn(0) then
+		spider.x-=1
+	end
+	if btn(1) then
+		spider.x+=1
+	end
+	if btn(2) then
+		spider.y-=1
+	end
+	if btn(3) then
+		spider.y+=1
+	end
+	if spider.spun_web_end_point then
+		spider.spun_web_end_point.x=spider.x
+		spider.spun_web_end_point.y=spider.y
+	end
+	-- if z is pressed, it either means to start spinning or to stop spinning
+	if btnp(4) then
+		-- start spinning
+		if not spider.is_spinning_web then
+			spider.is_spinning_web=true
+			spider.is_extending_web=true
+			local start_point=find_closest_point_not_being_spun(spider.x,spider.y,10)
+			if start_point then
+				spider.spun_web_start_point=start_point
+			else
+				-- determine if there is a tile
+				local col=1+flr(spider.x/8)
+				local row=1+flr(spider.y/8)
+				if tiles[row][col] and tiles[row][col].is_solid then
+					spider.spun_web_start_point=create_web_point(spider.x,spider.y,true)
+				else
+					spider.spun_web_start_point=create_web_point(spider.x,spider.y,false)
+				end
+			end
+			spider.spun_web_end_point=create_web_point(spider.x,spider.y,true)
+			spider.subpoints_in_spun_web=0
+			create_web_connection(spider.spun_web_end_point,spider.spun_web_start_point,10)
+		-- stop spinning
+		elseif not spider.is_extending_web then
+			local pt=find_closest_point_not_being_spun(spider.x,spider.y,10)
+			if pt then
+				create_web_connection(spider.spun_web_end_point,pt,10) --TODO this does not work
+				spider.spun_web_end_point.is_fixed=false
+				spider.spun_web_end_point.vx=0
+				spider.spun_web_end_point.vy=0
+			else
+				-- determine if there is a tile
+				local col=1+flr(spider.x/8)
+				local row=1+flr(spider.y/8)
+				if not tiles[row][col] or not tiles[row][col].is_solid then
+					spider.spun_web_end_point.is_fixed=false
+					spider.spun_web_end_point.vx=0
+					spider.spun_web_end_point.vy=0
+				end
+			end
+			spider.is_spinning_web=false
+			spider.spun_web_start_point=nil
+			spider.spun_web_end_point=nil
+			spider.subpoints_in_spun_web=0
+			foreach(web_points,function(pt)
+				pt.is_being_spun=false
+			end)
+		end
+	-- if z is not held, we can stop extending the web
+	elseif not btn(4) then
+		-- stop extending
+		if spider.is_spinning_web and spider.is_extending_web then
+			spider.is_extending_web=false
+		end
+	end
+	-- keep creating subpoints when spinning web
+	if spider.is_spinning_web and spider.is_extending_web then
+		local dx=spider.x-spider.spun_web_start_point.x
+		local dy=spider.y-spider.spun_web_start_point.y
+		local len=sqrt(dx*dx+dy*dy)
+		local num_subweb=flr(0.5+len/8)
+		if spider.subpoints_in_spun_web<num_subweb then
+			spider.subpoints_in_spun_web+=1
+			local pt=spider.spun_web_end_point
+			pt.is_fixed=false
+			pt.vx=0
+			pt.vy=0
+			spider.spun_web_end_point=create_web_point(spider.x,spider.y,true)
+			create_web_connection(pt,spider.spun_web_end_point,10)
+		end
+	end
+end
+
 function _update()
+	update_spider()
 	foreach(web_connections,update_web_connection)
 	foreach(web_points,update_web_point)
+	web_points=filter_list(web_points,function(pt)
+		return pt.is_alive
+	end)
 	web_connections=filter_list(web_connections,function(conn)
-		return conn.percent_elasticity_remaining>0
+		return conn.percent_elasticity_remaining>0 and conn.pt1.is_alive and conn.pt2.is_alive
 	end)
 end
 
@@ -136,10 +328,30 @@ function draw_web_connection(conn)
 	line(conn.pt1.x,conn.pt1.y,conn.pt2.x,conn.pt2.y)
 end
 
+function draw_bug(bug)
+	circfill(bug.x,bug.y,3,8)
+end
+
+function draw_tile(tile,col,row)
+	spr(tile.sprite,8*(col-1),8*(row-1))
+end
+
 function _draw()
-	rectfill(0,0,127,127,0)
+	rectfill(0,0,127,127,3)
+	local r
+	local c
+	for r=1,16 do
+		for c=1,16 do
+			if tiles[r][c] then
+				draw_tile(tiles[r][c],c,r)
+			end
+		end
+	end
 	foreach(web_connections,draw_web_connection)
 	foreach(web_points,draw_web_point)
+	foreach(bugs,draw_bug)
+	print(#web_points.." points",1,1,10)
+	print(#web_connections.." connections",1,7,10)
 end
 
 function filter_list(list,func)
@@ -154,14 +366,14 @@ function filter_list(list,func)
 end
 
 __gfx__
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+dddddddd000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+d555555d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+d555555d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+d555555d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+d555555d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+d555555d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+d555555d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+dddddddd000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
