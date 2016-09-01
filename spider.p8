@@ -25,6 +25,15 @@ web_points={}
 web_connections={}
 tiles={}
 
+-- TODO
+--  you cannot fly by climing on web you are spinning
+--  as long as you hold z you will keep generating web, regardless of movement
+--  points with no connections are removed
+--  you can move freely on tiles
+--  if you are not on any tiles or webs you fall with an increasing velocity
+--  you can lower yourself down on a line of silk you are spinning
+--  you can use X to select different web types (which are rendered differently)
+
 function find_closest_point_not_being_spun(x,y,max_dist)
 	local i
 	local closest_point=nil
@@ -156,6 +165,8 @@ function _init()
 		"x              x",
 		"x              x"
 	})
+	create_web_strand(2,2,100,100)
+	create_web_strand(4,50,120,40)
 end
 
 function update_web_point(pt)
@@ -288,6 +299,95 @@ function update_spider()
 			spider.spun_web_end_point=create_web_point(spider.x,spider.y,true)
 			create_web_connection(pt,spider.spun_web_end_point,10)
 		end
+	end
+	-- find nearest web strand
+	local x
+	local y
+	local square_dist
+	x,y,square_dist=calc_closest_point_on_web(spider.x,spider.y)
+	if x!=nil and y!=nil and square_dist<9*9 then
+		local dx=x-spider.x
+		local dy=y-spider.y
+		spider.x+=dx/4
+		spider.y+=dy/4
+		-- spider.x=x
+		-- spider.y=y
+	else
+		spider.y+=1
+	end
+end
+
+function calc_closest_point_on_web(x,y)
+	local closest_x=nil
+	local closest_y=nil
+	local closest_point_square_dist=nil
+	local i
+	local x2
+	local y2
+	local square_dist
+	for i=1,#web_connections do
+		x2,y2=calc_closest_point_on_line(
+			web_connections[i].pt1.x,web_connections[i].pt1.y,
+			web_connections[i].pt2.x,web_connections[i].pt2.y,
+			x,y)
+		if x2!=nil and y2!=nil then
+			square_dist=calc_square_dist_between_points(x,y,x2,y2)
+			if closest_point_square_dist==nil or square_dist<closest_point_square_dist then
+				closest_x=x2
+				closest_y=y2
+				closest_point_square_dist=square_dist
+			end
+		end
+	end
+	for i=1,#web_points do
+		x2=web_points[i].x
+		y2=web_points[i].y
+		square_dist=calc_square_dist_between_points(x,y,x2,y2)
+		if closest_point_square_dist==nil or square_dist<closest_point_square_dist then
+			closest_x=x2
+			closest_y=y2
+			closest_point_square_dist=square_dist
+		end
+	end
+	return closest_x,closest_y,closest_point_square_dist
+end
+
+function calc_square_dist_between_points(x1,y1,x2,y2)
+	local dx=x2-x1
+	local dy=y2-y1
+	return dx*dx+dy*dy
+end
+
+function calc_closest_point_on_line(x1,y1,x2,y2,cx,cy)
+	local match_x
+	local match_y
+	local dx=x2-x1
+	local dy=y2-y1
+	-- if the line is nearly vertical, it's easy
+	if 0.1>dx and dx>-0.1 then
+		match_x=x1
+		match_y=cy
+	-- if the line is nearly horizontal, it's also easy
+	elseif 0.1>dy and dy>-0.1 then
+		match_x=cx
+		match_y=y1
+	--otherwise we have a bit of math to do...
+	else
+		-- find equation of the line y=mx+b
+		local m=dy/dx
+		local b=y1-m*x1 -- b=y-mx
+		-- find reverse equation from circle
+		local m2=-dx/dy
+		local b2=cy-m2*cx -- b=y-mx
+		-- figure out where their y-values are the same
+		match_x=(b2-b)/(m-m2) -- mx+b=m2x+b2 --> x=(b2-b)/(m-m2)
+		-- plug that into either formula to get the y-value at that x-value
+		match_y=m*match_x+b -- y=mx+b
+	end
+	if mid(x1,match_x,x2)==match_x and mid(y1,match_y,y2)==match_y then
+		return match_x,match_y
+	else
+		return nil,nil
 	end
 end
 
