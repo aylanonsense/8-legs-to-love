@@ -173,13 +173,16 @@ function create_spider(x,y)
 		["facing_y"]=1,
 		["is_on_tile"]=false,
 		["is_alive"]=true,
-		["spun_web_type"]=1,
-		["is_attached_to_web"]=false,
-		["attached_web_point"]=nil,
+		["web_type"]=1,
+		["attached_web_strand"]=nil,
 		["frames_to_web_spin"]=0,
 		["is_spinning_web"]=false,
+		["is_web"]=false,
 		-- constants
 		["gravity"]=0.05,
+		["web_attract_dist"]=3,
+		["web_attach_dist"]=10,
+		["mass"]=4,
 		["move_speed"]=1,
 		["max_speed"]=2
 	}
@@ -190,46 +193,71 @@ function update_spider()
 		return
 	end
 
-	-- spawn web points/strands while spinning web
+	-- figure out if the spider is walking on a tile
+	spider.is_on_tile=is_solid_tile_at_spider()
+
+	-- figure out if the spider is walking on web
+	local web_x
+	local web_y
+	local web_square_dist
+	web_x,web_y,web_square_dist=calc_closest_spot_on_web(spider.x,spider.y,false)
+	spider.is_on_web=web_x!=nil and web_y!=nil and web_square_dist<spider.web_attract_dist*spider.web_attract_dist
+
+	-- spawn web points/strands while z is held
 	if spider.is_spinning_web then
 		spider.frames_to_web_spin-=1
 		if spider.frames_to_web_spin<=0 then
-			spider.frames_to_web_spin=web_types[spider.spun_web_type].physics.dist_between_points
-			local web_point=create_web_point_at_spider(false)
-			create_web_strand(spider.attached_web_point,web_point)
-			spider.attached_web_point=web_point
+			spider.frames_to_web_spin=web_types[spider.web_type].physics.dist_between_points
+			local mid_point=create_web_point_at_spider(false)
+			create_web_strand(spider.attached_web_strand.end_obj,mid_point)
+			spider.attached_web_strand.is_alive=false
+			spider.attached_web_strand=create_web_strand(spider,mid_point)
 		end
 	end
 
-	-- start spinning web when button is pressed
-	if not spider.is_attached_to_web and btnp(4) then
-		spider.is_attached_to_web=true
-		spider.is_spinning_web=true
-		spider.frames_to_web_spin=web_types[spider.spun_web_type].physics.dist_between_points
-		local web_point=create_web_point_at_spider(is_solid_tile_at_spider())
-		spider.attached_web_point=create_web_point_at_spider(false)
-		create_web_strand(spider.attached_web_point,web_point)
-	-- stop spinning web when released
-	elseif spider.is_spinning_web and not btn(4) then
+	-- if the spider's web gets cut off at the base, it's no longer spinning web
+	if spider.attached_web_strand and not spider.attached_web_strand.is_alive then
+		spider.attached_web_strand=nil
 		spider.is_spinning_web=false
-	-- if the spider's web gets cut off at the base, it's not longer spinning web
-	elseif spider.is_attached_to_web and not spider.is_spinning_web and not spider.attached_web_point.is_alive then
-		spider.is_attached_to_web=false
-		spider.attached_web_point=nil
-	-- cut off web strand when pressed again
-	elseif spider.is_attached_to_web and not spider.is_spinning_web and btnp(4) then
-		spider.is_attached_to_web=false
-		spider.attached_web_point.vx=0
-		spider.attached_web_point.vy=0
-		spider.attached_web_point.is_fixed=is_solid_tile_at_spider()
-		spider.attached_web_point=nil
+		mark_all_points_as_not_being_spun()
 	end
 
-	-- figure out if the spider is falling or walking on tile/web
-	spider.is_on_tile=is_solid_tile_at_spider()
+	-- start spinning web when z is first pressed
+	if not spider.attached_web_strand and btnp(4) then
+		spider.is_spinning_web=true
+		spider.frames_to_web_spin=web_types[spider.web_type].physics.dist_between_points
+		local start_point
+		local square_dist
+		start_point,square_dist=calc_closest_web_point(spider.x,spider.y,true)
+		-- if we can't find a point nearby to attach to, create a new one
+		if not start_point or square_dist>spider.web_attach_dist*spider.web_attach_dist or
+			(spider.is_on_tile and not start_point.has_been_anchored) then
+			start_point=create_web_point_at_spider(is_solid_tile_at_spider())
+		end
+		spider.attached_web_strand=create_web_strand(spider,start_point)
 
-	-- move the spider
-	if spider.is_on_tile then
+	-- stop spinning web when z is released
+	elseif spider.is_spinning_web and not btn(4) then
+		spider.is_spinning_web=false
+
+	-- cut/place the end of the strand when z is pressed again
+	elseif spider.attached_web_strand and not spider.is_spinning_web and btnp(4) then
+		local end_point
+		local square_dist
+		end_point,square_dist=calc_closest_web_point(spider.x,spider.y,true)
+		-- if we can't find a point nearby to attach to, create a new one
+		if not end_point or square_dist>spider.web_attach_dist*spider.web_attach_dist or
+			(spider.is_on_tile and not end_point.has_been_anchored) then
+			end_point=create_web_point_at_spider(is_solid_tile_at_spider())
+		end
+		create_web_strand(spider.attached_web_strand.end_obj,end_point)
+		spider.attached_web_strand.is_alive=false
+		spider.attached_web_strand=nil
+		mark_all_points_as_not_being_spun()
+	end
+
+	-- move the spider while on tile or web
+	if spider.is_on_tile or spider.is_on_web then
 		spider.vx=0
 		spider.vy=0
 		-- arrow keys move the spider
@@ -249,6 +277,14 @@ function update_spider()
 		if spider.vx!=0 and vy!=0 then
 			spider.vx*=sqrt(0.5)
 			spider.vy*=sqrt(0.5)
+		end
+
+		-- when on web, we are pulled towards it
+		if spider.is_on_web and not spider.is_on_tile then
+			local dx=web_x-spider.x
+			local dy=web_y-spider.y
+			spider.x+=dx/(2+spider.web_attract_dist)
+			spider.y+=dy/(2+spider.web_attract_dist)
 		end
 
 	-- otherwise, fall!
@@ -277,14 +313,6 @@ function update_spider()
 		spider.y=mid(0,spider.y,127)
 	end
 
-	-- while the spider spins web the end point follows her
-	if spider.attached_web_point and spider.attached_web_point.is_alive then
-		spider.attached_web_point.x=spider.x
-		spider.attached_web_point.y=spider.y
-		spider.attached_web_point.vx=-spider.facing_x
-		spider.attached_web_point.vy=-spider.facing_y
-	end
-
 	-- if the spider does wind up out of bounds, she's dead :'(
 	if spider.x<-5 or spider.x>132 or spider.y<-200 or spider.y>132 then
 		spider.is_alive=false
@@ -304,18 +332,22 @@ function draw_spider()
 end
 
 function create_web_point_at_spider(is_fixed)
-	local physics=web_types[spider.spun_web_type].physics
+	local physics=web_types[spider.web_type].physics
 	local web_point={
 		["x"]=spider.x,
 		["y"]=spider.y,
 		["vx"]=spider.vx-physics.initial_speed*spider.facing_x,
-		["vy"]=spider.vy-physics.initial_speed*spider.facing_y,
+		["vy"]=1+spider.vy-physics.initial_speed*spider.facing_y,
 		["is_alive"]=true,
 		["is_fixed"]=is_fixed,
+		["is_being_spun"]=true,
+		["has_been_anchored"]=is_fixed,
 		["num_strands"]=1, -- so it is alive the first frame
 		-- constants
-		["web_type"]=spider.spun_web_type,
-		["color"]=web_types[spider.spun_web_type].color,
+		["is_web"]=true,
+		["web_type"]=spider.web_type,
+		["mass"]=1,
+		["color"]=web_types[spider.web_type].color,
 		["physics"]=physics
 	}
 	if is_fixed then
@@ -363,21 +395,21 @@ function check_for_web_point_death(web_point)
 	return web_point.is_alive
 end
 
-function create_web_strand(web_point1,web_point2)
-	local physics=web_types[web_point1.web_type].physics
+function create_web_strand(start_obj,end_obj)
+	local physics=web_types[start_obj.web_type].physics
 	local base_length=physics.dist_between_points -- TODO should not be hardcoded
 	local starting_length=base_length/(1+physics.elasticity*physics.initial_tautness)
 	local web_strand={
-		["web_point1"]=web_point1,
-		["web_point2"]=web_point2,
+		["start_obj"]=start_obj,
+		["end_obj"]=end_obj,
 		["is_alive"]=true,
 		["starting_length"]=starting_length,
 		["stretched_length"]=starting_length,
 		["break_length"]=physics.break_ratio*starting_length,
 		["percent_elasticity_remaining"]=1,
 		-- constants
-		["web_type"]=web_point1.web_type,
-		["color"]=web_types[web_point1.web_type].color,
+		["web_type"]=start_obj.web_type,
+		["color"]=web_types[start_obj.web_type].color,
 		["physics"]=physics
 	}
 	add(web_strands,web_strand)
@@ -385,13 +417,19 @@ function create_web_strand(web_point1,web_point2)
 end
 
 function update_web_strand(web_strand)
+	local start_obj=web_strand.start_obj
+	local end_obj=web_strand.end_obj
 	-- keep track of the number of strands attached to each point
-	web_strand.web_point1.num_strands+=1
-	web_strand.web_point2.num_strands+=1
+	if start_obj.is_web then
+		start_obj.num_strands+=1
+	end
+	if end_obj.is_web then
+		end_obj.num_strands+=1
+	end
 
 	-- find distance between the two points
-	local dx=web_strand.web_point2.x-web_strand.web_point1.x
-	local dy=web_strand.web_point2.y-web_strand.web_point1.y
+	local dx=end_obj.x-start_obj.x
+	local dy=end_obj.y-start_obj.y
 	local len=sqrt(dx*dx+dy*dy)
 
 	-- stretch the strand out
@@ -409,17 +447,25 @@ function update_web_strand(web_strand)
 	-- bring the two points close to each other
 	if len>web_strand.stretched_length and web_strand.percent_elasticity_remaining>0 then
 		local elastic_dist = len-web_strand.stretched_length
-		web_strand.web_point1.vx+=elastic_dist*web_strand.physics.force_mult*dx/len
-		web_strand.web_point1.vy+=elastic_dist*web_strand.physics.force_mult*dy/len
-		web_strand.web_point2.vx-=elastic_dist*web_strand.physics.force_mult*dx/len
-		web_strand.web_point2.vy-=elastic_dist*web_strand.physics.force_mult*dy/len
+		local f=elastic_dist*web_strand.physics.force_mult
+		start_obj.vx+=f*(end_obj.mass/start_obj.mass)*(dx/len)
+		start_obj.vy+=f*(end_obj.mass/start_obj.mass)*(dy/len)
+		end_obj.vx-=f*(start_obj.mass/end_obj.mass)*(dx/len)
+		end_obj.vy-=f*(start_obj.mass/end_obj.mass)*(dy/len)
+	end
+
+	-- connections transfer has_been_anchored status
+	if start_obj.is_web and end_obj.is_web then
+		if start_obj.has_been_anchored then
+			end_obj.has_been_anchored = true
+		end
+		if end_obj.has_been_anchored then
+			start_obj.has_been_anchored = true
+		end
 	end
 end
 
 function draw_web_strand(web_strand)
-	-- line(web_strand.web_point1.x,web_strand.web_point1.y,
-	-- 	web_strand.web_point2.x,web_strand.web_point2.y,
-	-- 	web_types[web_strand.web_type].color)
 	if web_strand.percent_elasticity_remaining>=1.00 then
 		color(7)
 	elseif web_strand.percent_elasticity_remaining>0.75 then
@@ -433,12 +479,12 @@ function draw_web_strand(web_strand)
 	else
 		color(8)
 	end
-	line(web_strand.web_point1.x,web_strand.web_point1.y,
-		web_strand.web_point2.x,web_strand.web_point2.y)
+	line(web_strand.start_obj.x,web_strand.start_obj.y,
+		web_strand.end_obj.x,web_strand.end_obj.y)
 end
 
 function check_for_web_strand_death(web_strand)
-	if not web_strand.web_point1.is_alive or not web_strand.web_point2.is_alive then
+	if not web_strand.start_obj.is_alive or not web_strand.end_obj.is_alive then
 		web_strand.is_alive=false
 	elseif web_strand.percent_elasticity_remaining<=0 then
 		web_strand.is_alive=false
@@ -448,6 +494,12 @@ end
 
 
 -- helper functions
+function mark_all_points_as_not_being_spun()
+	foreach(web_points,function(web_point)
+		web_point.is_being_spun=false
+	end)
+end
+
 function is_solid_tile_at_spider()
 	return is_solid_tile_at(spider.x,spider.y)
 end
@@ -481,6 +533,96 @@ end
 
 function is_alive(x)
 	return x.is_alive
+end
+
+function calc_square_dist_between_points(x1,y1,x2,y2)
+	local dx=x2-x1
+	local dy=y2-y1
+	return dx*dx+dy*dy
+end
+
+function calc_closest_point_on_line(x1,y1,x2,y2,cx,cy)
+	local match_x
+	local match_y
+	local dx=x2-x1
+	local dy=y2-y1
+	-- if the line is nearly vertical, it's easy
+	if 0.1>dx and dx>-0.1 then
+		match_x=x1
+		match_y=cy
+	-- if the line is nearly horizontal, it's also easy
+	elseif 0.1>dy and dy>-0.1 then
+		match_x=cx
+		match_y=y1
+	--otherwise we have a bit of math to do...
+	else
+		-- find equation of the line y=mx+b
+		local m=dy/dx
+		local b=y1-m*x1 -- b=y-mx
+		-- find reverse equation from circle
+		local m2=-dx/dy
+		local b2=cy-m2*cx -- b=y-mx
+		-- figure out where their y-values are the same
+		match_x=(b2-b)/(m-m2) -- mx+b=m2x+b2 --> x=(b2-b)/(m-m2)
+		-- plug that into either formula to get the y-value at that x-value
+		match_y=m*match_x+b -- y=mx+b
+	end
+	if mid(x1,match_x,x2)==match_x and mid(y1,match_y,y2)==match_y then
+		return match_x,match_y
+	else
+		return nil,nil
+	end
+end
+
+function calc_closest_web_point(x,y,allow_freefalling)
+	local i
+	local square_dist
+	local closest_web_point=nil
+	local closest_square_dist=nil
+	for i=1,#web_points do
+		if not web_points[i].is_being_spun and (allow_freefalling or web_points[i].has_been_anchored) then
+			square_dist=calc_square_dist_between_points(x,y,web_points[i].x,web_points[i].y)
+			if closest_square_dist==nil or square_dist<closest_square_dist then
+				closest_web_point=web_points[i]
+				closest_square_dist=square_dist
+			end
+		end
+	end
+	return closest_web_point,closest_square_dist
+end
+
+function calc_closest_spot_on_web(x,y,allow_freefalling)
+	local closest_web_point
+	local closest_square_dist
+	closest_web_point,closest_square_dist=calc_closest_web_point(x,y,allow_freefalling)
+	local closest_x=nil
+	local closest_y=nil
+	if closest_web_point then
+		closest_x=closest_web_point.x
+		closest_y=closest_web_point.y
+	end
+	local i
+	for i=1,#web_strands do
+		if not web_strands[i].start_obj.is_being_spun and
+			not web_strands[i].end_obj.is_being_spun and
+			(allow_freefalling or (web_strands[i].start_obj.has_been_anchored and web_strands[i].end_obj.has_been_anchored)) then
+			local x2
+			local y2
+			x2,y2=calc_closest_point_on_line(
+				web_strands[i].start_obj.x,web_strands[i].start_obj.y,
+				web_strands[i].end_obj.x,web_strands[i].end_obj.y,
+				x,y)
+			if x2!=nil and y2!=nil then
+				local square_dist=calc_square_dist_between_points(x,y,x2,y2)
+				if closest_square_dist==nil or square_dist<closest_square_dist then
+					closest_x=x2
+					closest_y=y2
+					closest_square_dist=square_dist
+				end
+			end
+		end
+	end
+	return closest_x,closest_y,closest_square_dist
 end
 
 __gfx__
