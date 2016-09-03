@@ -2,7 +2,6 @@ pico-8 cartridge // http://www.pico-8.com
 version 8
 __lua__
 
-
 -- game vars
 bg_color=0
 spider=nil
@@ -43,8 +42,9 @@ function _draw()
 	-- draw the playable spider
 	draw_spider()
 
-	print("Points:  "..#web_points,10,10,9)
-	print("Strands: "..#web_strands,10,20,9)
+	-- print some debug text
+	print("points:  "..#web_points,1,1,9)
+	print("strands: "..#web_strands,1,7,9)
 end
 
 
@@ -64,8 +64,8 @@ levels={
 			"xx            xx",
 			" x        x   x ",
 			" x            x ",
-			"xx            xx",
-			"x              x",
+			"xx     y      xx",
+			"x      y      yx",
 			"xxxxxxxxxxxxxxxx",
 			"xxxxxxxxxxx    x",
 			"x  xxxx        x"
@@ -76,7 +76,13 @@ levels={
 tile_types={
 	["x"]={
 		["sprite"]=0,
-		["is_solid"]=true
+		-- {upper_half,lower_half}
+		["solid_bits"]={255,255}
+	},
+	["y"]={
+		["sprite"]=1,
+		-- {upper_half,lower_half}
+		["solid_bits"]={200,254}
 	}
 }
 
@@ -84,10 +90,13 @@ web_types={
 	{
 		["color"]=7,
 		["physics"]={
+			["initial_speed"]=1,
+			["initial_tautness"]=0.00,
+			["dist_between_points"]=10,
 			["gravity"]=0.02,
 			["friction"]=0.95,
 			["elasticity"]=1.00,
-			["break_ratio"]=2.00,
+			["break_ratio"]=4.00,
 			["force_mult"]=0.2
 		}
 	}
@@ -134,7 +143,7 @@ end
 function create_tile(symbol,col,row)
 	return {
 		["sprite"]=tile_types[symbol].sprite,
-		["is_solid"]=tile_types[symbol].sprite
+		["solid_bits"]=tile_types[symbol].solid_bits
 	}
 end
 
@@ -172,8 +181,7 @@ function create_spider(x,y)
 		-- constants
 		["gravity"]=0.05,
 		["move_speed"]=1,
-		["max_speed"]=2,
-		["frames_between_web_spin"]=10
+		["max_speed"]=2
 	}
 end
 
@@ -186,8 +194,8 @@ function update_spider()
 	if spider.is_spinning_web then
 		spider.frames_to_web_spin-=1
 		if spider.frames_to_web_spin<=0 then
-			spider.frames_to_web_spin=spider.frames_between_web_spin
-			local web_point=create_web_point(spider.x,spider.y,-spider.facing_x,-spider.facing_y,spider.spun_web_type)
+			spider.frames_to_web_spin=web_types[spider.spun_web_type].physics.dist_between_points
+			local web_point=create_web_point_at_spider(false)
 			create_web_strand(spider.attached_web_point,web_point)
 			spider.attached_web_point=web_point
 		end
@@ -197,9 +205,9 @@ function update_spider()
 	if not spider.is_attached_to_web and btnp(4) then
 		spider.is_attached_to_web=true
 		spider.is_spinning_web=true
-		spider.frames_to_web_spin=spider.frames_between_web_spin
-		local web_point=create_web_point(spider.x,spider.y,-spider.facing_x,-spider.facing_y,spider.spun_web_type)
-		spider.attached_web_point=create_web_point(spider.x,spider.y,-spider.facing_x,-spider.facing_y,spider.spun_web_type)
+		spider.frames_to_web_spin=web_types[spider.spun_web_type].physics.dist_between_points
+		local web_point=create_web_point_at_spider(is_solid_tile_at_spider())
+		spider.attached_web_point=create_web_point_at_spider(false)
 		create_web_strand(spider.attached_web_point,web_point)
 	-- stop spinning web when released
 	elseif spider.is_spinning_web and not btn(4) then
@@ -213,11 +221,12 @@ function update_spider()
 		spider.is_attached_to_web=false
 		spider.attached_web_point.vx=0
 		spider.attached_web_point.vy=0
+		spider.attached_web_point.is_fixed=is_solid_tile_at_spider()
 		spider.attached_web_point=nil
 	end
 
 	-- figure out if the spider is falling or walking on tile/web
-	spider.is_on_tile=is_solid_tile_at(spider.x,spider.y)
+	spider.is_on_tile=is_solid_tile_at_spider()
 
 	-- move the spider
 	if spider.is_on_tile then
@@ -241,11 +250,6 @@ function update_spider()
 			spider.vx*=sqrt(0.5)
 			spider.vy*=sqrt(0.5)
 		end
-		-- keep track of which direction the spider is facing
-		if spider.vx!=0 or spider.vy!=0 then
-			spider.facing_x=spider.vx/spider.move_speed
-			spider.facing_y=spider.vy/spider.move_speed
-		end
 
 	-- otherwise, fall!
 	else
@@ -259,6 +263,13 @@ function update_spider()
 	-- finally, apply that velocity
 	spider.x+=spider.vx
 	spider.y+=spider.vy
+
+	-- keep track of which direction the spider is facing
+	if spider.vx!=0 or spider.vy!=0 then
+		local speed=sqrt(spider.vx*spider.vx+spider.vy*spider.vy)
+		spider.facing_x=spider.vx/speed
+		spider.facing_y=spider.vy/speed
+	end
 
 	-- keep dat spider in bounds so long as she isn't freefalling
 	if spider.is_on_tile then
@@ -282,21 +293,35 @@ end
 
 function draw_spider()
 	if spider.is_alive then
-		circfill(spider.x,spider.y,3,8)
+		if spider.is_on_tile then
+			color(8)
+		else
+			color(12)
+		end
+		pset(spider.x,spider.y)
+		-- circfill(spider.x,spider.y,1)
 	end
 end
 
-function create_web_point(x,y,vx,vy,web_type)
+function create_web_point_at_spider(is_fixed)
+	local physics=web_types[spider.spun_web_type].physics
 	local web_point={
-		["x"]=x,
-		["y"]=y,
-		["vx"]=vx,
-		["vy"]=vy,
+		["x"]=spider.x,
+		["y"]=spider.y,
+		["vx"]=spider.vx-physics.initial_speed*spider.facing_x,
+		["vy"]=spider.vy-physics.initial_speed*spider.facing_y,
 		["is_alive"]=true,
+		["is_fixed"]=is_fixed,
 		["num_strands"]=1, -- so it is alive the first frame
 		-- constants
-		["web_type"]=web_type
+		["web_type"]=spider.spun_web_type,
+		["color"]=web_types[spider.spun_web_type].color,
+		["physics"]=physics
 	}
+	if is_fixed then
+		web_point.vx=0
+		web_point.vy=0
+	end
 	add(web_points,web_point)
 	return web_point
 end
@@ -312,6 +337,11 @@ function update_web_point(web_point)
 
 	-- add some gravity
 	web_point.vy+=physics.gravity
+
+	if web_point.is_fixed then
+		web_point.vx=0
+		web_point.vy=0
+	end
 
 	-- apply velocity
 	web_point.x+=web_point.vx
@@ -334,58 +364,55 @@ function check_for_web_point_death(web_point)
 end
 
 function create_web_strand(web_point1,web_point2)
-	local web_type=web_point1.web_type
-	local physics=web_types[web_type].physics
-	local base_len=10 -- TODO should not be hardcoded
+	local physics=web_types[web_point1.web_type].physics
+	local base_length=physics.dist_between_points -- TODO should not be hardcoded
+	local starting_length=base_length/(1+physics.elasticity*physics.initial_tautness)
 	local web_strand={
 		["web_point1"]=web_point1,
 		["web_point2"]=web_point2,
-		["web_type"]=web_type,
 		["is_alive"]=true,
-		["starting_length"]=base_len/(1+physics.elasticity/2),
-		["stretched_length"]=base_len,
-		["break_length"]=physics.break_ratio*base_len,
-		["percent_elasticity_remaining"]=1
+		["starting_length"]=starting_length,
+		["stretched_length"]=starting_length,
+		["break_length"]=physics.break_ratio*starting_length,
+		["percent_elasticity_remaining"]=1,
+		-- constants
+		["web_type"]=web_point1.web_type,
+		["color"]=web_types[web_point1.web_type].color,
+		["physics"]=physics
 	}
 	add(web_strands,web_strand)
 	return web_strand
 end
 
 function update_web_strand(web_strand)
-	local physics=web_types[web_strand.web_type].physics
-
 	-- keep track of the number of strands attached to each point
 	web_strand.web_point1.num_strands+=1
 	web_strand.web_point2.num_strands+=1
 
-	-- find distance between two points
+	-- find distance between the two points
 	local dx=web_strand.web_point2.x-web_strand.web_point1.x
 	local dy=web_strand.web_point2.y-web_strand.web_point1.y
 	local len=sqrt(dx*dx+dy*dy)
 
-	-- -- if it's greater than the break length... break!
-	if len>=web_strand.break_length then
-		web_strand.percent_elasticity_remaining=0
-
-	-- -- otherwise MAAAATH
-	else
-		local min_len=web_strand.starting_length*(1+physics.elasticity)
-		local max_len=web_strand.break_length
-		if len>min_len then
-			local percent_elasticity=mid(0,1-((len-min_len)/(max_len-min_len)),1)
-			if percent_elasticity<=web_strand.percent_elasticity_remaining then
-				web_strand.percent_elasticity_remaining=percent_elasticity
-				web_strand.stretched_length=len/(1+physics.elasticity*web_strand.percent_elasticity_remaining)
-			end
+	-- stretch the strand out
+	local min_len=web_strand.starting_length*(1+web_strand.physics.elasticity)
+	local max_len=web_strand.break_length
+	if len>min_len then
+		-- if we stretch too far, the strand loses elasticity
+		local percent_elasticity=mid(0,1-((len-min_len)/(max_len-min_len)),1)
+		if percent_elasticity<=web_strand.percent_elasticity_remaining then
+			web_strand.percent_elasticity_remaining=percent_elasticity
+			web_strand.stretched_length=len/(1+web_strand.physics.elasticity*web_strand.percent_elasticity_remaining)
 		end
 	end
 
-	if len>web_strand.stretched_length then
+	-- bring the two points close to each other
+	if len>web_strand.stretched_length and web_strand.percent_elasticity_remaining>0 then
 		local elastic_dist = len-web_strand.stretched_length
-		web_strand.web_point1.vx+=elastic_dist*physics.force_mult*dx/len
-		web_strand.web_point1.vy+=elastic_dist*physics.force_mult*dy/len
-		web_strand.web_point2.vx-=elastic_dist*physics.force_mult*dx/len
-		web_strand.web_point2.vy-=elastic_dist*physics.force_mult*dy/len
+		web_strand.web_point1.vx+=elastic_dist*web_strand.physics.force_mult*dx/len
+		web_strand.web_point1.vy+=elastic_dist*web_strand.physics.force_mult*dy/len
+		web_strand.web_point2.vx-=elastic_dist*web_strand.physics.force_mult*dx/len
+		web_strand.web_point2.vy-=elastic_dist*web_strand.physics.force_mult*dy/len
 	end
 end
 
@@ -421,10 +448,24 @@ end
 
 
 -- helper functions
+function is_solid_tile_at_spider()
+	return is_solid_tile_at(spider.x,spider.y)
+end
+
 function is_solid_tile_at(x,y)
 	local c=1+flr(x/8)
 	local r=1+flr(y/8)
-	return tiles[c] and tiles[c][r] and tiles[c][r].is_solid
+	if tiles[c] and tiles[c][r] then
+		-- turn the position into a bit 1 to 16
+		local bit=1+flr(x/2)%4+4*(flr(y/2)%4)
+		-- check that against the tile's solid_bits
+		if bit>8 then
+			return band(2^(bit-9),tiles[c][r].solid_bits[2])>0
+		else
+			return band(2^(bit-1),tiles[c][r].solid_bits[1])>0
+		end
+	end
+	return false
 end
 
 function filter_list(list,func)
@@ -443,14 +484,14 @@ function is_alive(x)
 end
 
 __gfx__
-dddddddd000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-d555555d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-d555555d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-d555555d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-d555555d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-d555555d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-d555555d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-dddddddd000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+dddddddd000000dd0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+d555555d000000dd0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+d555555d0000dd550000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+d555555d0000dd550000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+d555555d00dd55dd0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+d555555d00dd55dd0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+d555555ddd55dd550000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+dddddddddd55dd550000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
