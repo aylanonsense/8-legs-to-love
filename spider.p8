@@ -127,7 +127,6 @@ tile_types={
 
 web_types={
 	{
-		["color"]=7,
 		["physics"]={
 			["initial_speed"]=1,
 			["initial_tautness"]=0.00,
@@ -136,11 +135,14 @@ web_types={
 			["friction"]=0.95,
 			["elasticity"]=1.00,
 			["break_ratio"]=4.00,
-			["force_mult"]=0.2
+			["spring_force"]=0.2
+		},
+		["render"]={
+			["icon_sprite"]=9,
+			["is_dashed"]=false
 		}
 	},
 	{
-		["color"]=8,
 		["physics"]={
 			["initial_speed"]=1,
 			["initial_tautness"]=0.00,
@@ -149,7 +151,11 @@ web_types={
 			["friction"]=0.95,
 			["elasticity"]=1.00,
 			["break_ratio"]=4.00,
-			["force_mult"]=0.2
+			["spring_force"]=0.2
+		},
+		["render"]={
+			["icon_sprite"]=10,
+			["is_dashed"]=true
 		}
 	}
 }
@@ -217,6 +223,7 @@ function draw_tile(tile,col,row)
 	local x=8*col-8
 	local y=8*row-8
 	spr(tile.sprite,x,y,1,1,tile.is_flipped)
+	-- uncomment to see terrain "hitboxes"
 	-- local x2
 	-- for x2=0,3 do
 	-- 	local y2
@@ -454,8 +461,8 @@ function create_web_point_at_spider(is_fixed)
 		["is_web"]=true,
 		["web_type"]=spider.web_type,
 		["mass"]=1,
-		["color"]=web_types[spider.web_type].color,
-		["physics"]=physics
+		["physics"]=physics,
+		["render"]=web_types[spider.web_type].render
 	}
 	if is_fixed then
 		web_point.vx=0
@@ -467,7 +474,7 @@ function create_web_point_at_spider(is_fixed)
 end
 
 function update_web_point(web_point)
-	local physics=web_types[web_point.web_type].physics
+	local physics=web_point.physics
 
 	-- points not attached to any strands are dead
 	if web_point.num_strands<=0 then
@@ -505,20 +512,19 @@ end
 
 function create_web_strand(start_obj,end_obj)
 	local physics=web_types[start_obj.web_type].physics
-	local base_length=physics.dist_between_points -- todo should not be hardcoded
-	local starting_length=base_length/(1+physics.elasticity*physics.initial_tautness)
+	local base_length=physics.dist_between_points/(1+physics.initial_tautness*physics.elasticity)
 	local web_strand={
 		["start_obj"]=start_obj,
 		["end_obj"]=end_obj,
 		["is_alive"]=true,
-		["starting_length"]=starting_length,
-		["stretched_length"]=starting_length,
-		["break_length"]=physics.break_ratio*starting_length,
+		["base_length"]=base_length,
+		["stretched_length"]=base_length,
+		["break_length"]=base_length*physics.break_ratio,
 		["percent_elasticity_remaining"]=1,
 		-- constants
 		["web_type"]=start_obj.web_type,
-		["color"]=web_types[start_obj.web_type].color,
-		["physics"]=physics
+		["physics"]=physics,
+		["render"]=web_types[start_obj.web_type].render
 	}
 	add(web_strands,web_strand)
 	return web_strand
@@ -527,6 +533,7 @@ end
 function update_web_strand(web_strand)
 	local start_obj=web_strand.start_obj
 	local end_obj=web_strand.end_obj
+
 	-- keep track of the number of strands attached to each point
 	if start_obj.is_web then
 		start_obj.num_strands+=1
@@ -535,31 +542,32 @@ function update_web_strand(web_strand)
 		end_obj.num_strands+=1
 	end
 
-	-- find distance between the two points
+	-- find the current length of the strand
 	local dx=end_obj.x-start_obj.x
 	local dy=end_obj.y-start_obj.y
 	local len=sqrt(dx*dx+dy*dy)
 
-	-- stretch the strand out
-	local min_len=web_strand.starting_length*(1+web_strand.physics.elasticity)
-	local max_len=web_strand.break_length
+	-- if the strand stretches too far, it loses elasticity
+	local min_len=web_strand.base_length*(1+web_strand.physics.elasticity)
+	local max_len=web_strand.break_length -- not multiplied by elasticity b/c it is 0 at the break length
 	if len>min_len then
-		-- if we stretch too far, the strand loses elasticity
 		local percent_elasticity=mid(0,1-((len-min_len)/(max_len-min_len)),1)
 		if percent_elasticity<=web_strand.percent_elasticity_remaining then
 			web_strand.percent_elasticity_remaining=percent_elasticity
-			web_strand.stretched_length=len/(1+web_strand.physics.elasticity*web_strand.percent_elasticity_remaining)
+			web_strand.stretched_length=len/(1+web_strand.physics.elasticity*percent_elasticity)
 		end
 	end
 
 	-- bring the two points close to each other
 	if len>web_strand.stretched_length and web_strand.percent_elasticity_remaining>0 then
-		local elastic_dist = len-web_strand.stretched_length
-		local f=elastic_dist*web_strand.physics.force_mult
-		start_obj.vx+=f*(end_obj.mass/start_obj.mass)*(dx/len)
-		start_obj.vy+=f*(end_obj.mass/start_obj.mass)*(dy/len)
-		end_obj.vx-=f*(start_obj.mass/end_obj.mass)*(dx/len)
-		end_obj.vy-=f*(start_obj.mass/end_obj.mass)*(dy/len)
+		local elastic_dist=len-web_strand.stretched_length
+		local f=elastic_dist*web_strand.physics.spring_force
+		local m1=start_obj.mass
+		local m2=end_obj.mass
+		start_obj.vx+=f*(m2/m1)*(dx/len)
+		start_obj.vy+=f*(m2/m1)*(dy/len)
+		end_obj.vx-=f*(m1/m2)*(dx/len)
+		end_obj.vy-=f*(m1/m2)*(dy/len)
 	end
 
 	-- connections transfer has_been_anchored status
@@ -583,8 +591,19 @@ function draw_web_strand(web_strand)
 	else
 		color(8)
 	end
-	line(web_strand.start_obj.x,web_strand.start_obj.y,
-		web_strand.end_obj.x,web_strand.end_obj.y)
+	local start_obj=web_strand.start_obj
+	local end_obj=web_strand.end_obj
+	if web_strand.render.is_dashed then
+		local dx=end_obj.x-start_obj.x
+		local dy=end_obj.y-start_obj.y
+		local steps=flr(max(abs(dx),abs(dy))+0.9)
+		local i
+		for i=1,steps,2 do
+			pset(start_obj.x+dx*i/steps,start_obj.y+dy*i/steps)
+		end
+	else
+		line(start_obj.x,start_obj.y,end_obj.x,end_obj.y)
+	end
 end
 
 function check_for_web_strand_death(web_strand)
@@ -605,7 +624,7 @@ function draw_ui()
 	end
 	rectfill(1,2,1+spider.webbing,5)
 	rect(1,1,2+spider.max_webbing,6)
-	spr(8+spider.web_type,49,0)
+	spr(web_types[spider.web_type].render.icon_sprite,49,0)
 end
 
 
