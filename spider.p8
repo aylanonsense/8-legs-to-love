@@ -3,9 +3,6 @@ version 8
 __lua__
 
 -- todo
--- draw dotted line for sticky web
--- refine physics variables
--- fix strand code
 -- flies that come from background
 -- flies get caught
 -- flies can be eaten
@@ -65,6 +62,7 @@ end
 -- constants
 levels={
 	{
+		["spawn_point"]={63,17},
 		["bg_color"]=0,
 		["map"]={
 			"qttr        z21r",
@@ -132,10 +130,11 @@ web_types={
 			["initial_tautness"]=0.00,
 			["dist_between_points"]=5,
 			["gravity"]=0.02,
-			["friction"]=0.95,
-			["elasticity"]=1.00,
-			["break_ratio"]=4.00,
-			["spring_force"]=0.2
+			["friction"]=0.1,
+			["elasticity"]=1.65,
+			["break_ratio"]=5.00,
+			["detatch_from_tile_ratio"]=10.00, -- won't happen
+			["spring_force"]=0.25
 		},
 		["render"]={
 			["icon_sprite"]=9,
@@ -148,9 +147,10 @@ web_types={
 			["initial_tautness"]=0.00,
 			["dist_between_points"]=5,
 			["gravity"]=0.02,
-			["friction"]=0.95,
-			["elasticity"]=1.00,
+			["friction"]=0.05,
+			["elasticity"]=0.60,
 			["break_ratio"]=4.00,
+			["detatch_from_tile_ratio"]=2.00,
 			["spring_force"]=0.2
 		},
 		["render"]={
@@ -169,7 +169,7 @@ function load_level(level_num)
 	load_tiles(levels[level_num].map)
 	web_points={}
 	web_strands={}
-	spider=create_spider(64,64)
+	spider=create_spider(levels[level_num].spawn_point[1],levels[level_num].spawn_point[2])
 end
 
 function reset_tiles()
@@ -444,7 +444,7 @@ function draw_spider()
 end
 
 next_web_point_id=0
-function create_web_point_at_spider(is_fixed)
+function create_web_point_at_spider(is_attached_to_tile)
 	local physics=web_types[spider.web_type].physics
 	local web_point={
 		["id"]=next_web_point_id,
@@ -453,9 +453,9 @@ function create_web_point_at_spider(is_fixed)
 		["vx"]=spider.vx-physics.initial_speed*spider.facing_x,
 		["vy"]=-0+spider.vy-physics.initial_speed*spider.facing_y,
 		["is_alive"]=true,
-		["is_fixed"]=is_fixed,
+		["is_attached_to_tile"]=is_attached_to_tile,
 		["is_being_spun"]=true,
-		["has_been_anchored"]=is_fixed,
+		["has_been_anchored"]=is_attached_to_tile,
 		["num_strands"]=1, -- so it is alive the first frame
 		-- constants
 		["is_web"]=true,
@@ -464,7 +464,7 @@ function create_web_point_at_spider(is_fixed)
 		["physics"]=physics,
 		["render"]=web_types[spider.web_type].render
 	}
-	if is_fixed then
+	if is_attached_to_tile then
 		web_point.vx=0
 		web_point.vy=0
 	end
@@ -485,7 +485,7 @@ function update_web_point(web_point)
 	-- add some gravity
 	web_point.vy+=physics.gravity
 
-	if web_point.is_fixed then
+	if web_point.is_attached_to_tile then
 		web_point.vx=0
 		web_point.vy=0
 	end
@@ -495,8 +495,8 @@ function update_web_point(web_point)
 	web_point.y+=web_point.vy
 
 	-- apply friction
-	web_point.vx*=physics.friction
-	web_point.vy*=physics.friction
+	web_point.vx*=(1-physics.friction)
+	web_point.vy*=(1-physics.friction)
 end
 
 function draw_web_point(web_point)
@@ -520,6 +520,7 @@ function create_web_strand(start_obj,end_obj)
 		["base_length"]=base_length,
 		["stretched_length"]=base_length,
 		["break_length"]=base_length*physics.break_ratio,
+		["detatch_length"]=base_length*physics.detatch_from_tile_ratio,
 		["percent_elasticity_remaining"]=1,
 		-- constants
 		["web_type"]=start_obj.web_type,
@@ -570,13 +571,23 @@ function update_web_strand(web_strand)
 		end_obj.vy-=f*(m1/m2)*(dy/len)
 	end
 
-	-- connections transfer has_been_anchored status
+	-- strands transfer has_been_anchored status
 	if start_obj.is_web and end_obj.is_web then
 		if start_obj.has_been_anchored then
 			end_obj.has_been_anchored = true
 		end
 		if end_obj.has_been_anchored then
 			start_obj.has_been_anchored = true
+		end
+	end
+
+	-- strands may detatch from tile
+	if len>web_strand.detatch_length then
+		if start_obj.is_web then
+			start_obj.is_attached_to_tile=false
+		end
+		if end_obj.is_web then
+			end_obj.is_attached_to_tile=false
 		end
 	end
 end
