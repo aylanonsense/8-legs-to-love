@@ -18,7 +18,8 @@ __lua__
 -- game vars
 tile_symbols='abcdefghijklmnopqrstuvwxyz0123456789'
 tile_flip_matrix={8,4,2,1,128,64,32,16}
-game_frame=0
+scene=nil
+scene_frame=0
 bg_color=0
 spider=nil
 bugs={}
@@ -29,13 +30,46 @@ tiles={}
 
 -- main functions
 function _init()
-	load_level(1)
+	-- init_game()
+	init_tutorial()
 end
 
 function _update()
-	game_frame+=1
+	scene_frame+=1
+	if scene=='game' then
+		update_game()
+	elseif scene=='tutorial' then
+		update_tutorial()
+	end
+end
 
-	if game_frame%10==0 and rnd(1)<0.1 then
+function _draw()
+	-- clear the canvas
+	camera()
+	rectfill(0,0,127,127,bg_color)
+	
+	if scene=='game' then
+		draw_game()
+	elseif scene=='tutorial' then
+		draw_tutorial()
+	end
+end
+
+
+-- game functions
+function init_game()
+	scene='game'
+	scene_frame=0
+	bg_color=levels[1].bg_color
+	reset_tiles()
+	load_tiles(levels[1].map,tilesets[levels[1].tileset])
+	web_points={}
+	web_strands={}
+	spider=create_spider(levels[1].spawn_point[1],levels[1].spawn_point[2],true)
+end
+
+function update_game()
+	if scene_frame%10==0 and rnd(1)<0.1 then
 		create_fly()
 	end
 
@@ -55,10 +89,7 @@ function _update()
 	bugs=filter_list(bugs,is_alive)
 end
 
-function _draw()
-	-- clear the canvas
-	camera()
-	rectfill(0,0,127,127,bg_color)
+function draw_game()
 	camera(0,-8)
 
 	-- draw bugs in the background
@@ -96,6 +127,132 @@ function _draw()
 	draw_ui()
 end
 
+
+-- tutorial functions
+function init_tutorial()
+	scene="tutorial"
+	scene_frame=0
+	web_points={}
+	web_strands={}
+	spider=create_spider(0,40,false)
+end
+
+function update_tutorial()
+	-- update the web
+	foreach(web_strands,update_web_strand)
+	foreach(web_points,update_web_point)
+
+	if scene_frame==10 then
+		spider.is_holding_right=true
+		spider.is_holding_down=true
+	elseif scene_frame==45 then
+		spider.is_holding_right=false
+		spider.is_holding_down=false
+	elseif scene_frame==80 then
+		spider.is_holding_z=true
+		spider.has_pressed_z=true
+		spider.is_holding_right=true
+	elseif scene_frame==81 then
+		spider.has_pressed_z=false
+	elseif scene_frame==100 then
+		spider.is_holding_right=false
+	elseif scene_frame==130 then
+		spider.is_holding_z=false
+	elseif scene_frame==200 then
+		spider.is_holding_right=true
+	elseif scene_frame==270 then
+		spider.has_pressed_z=true
+	elseif scene_frame==271 then
+		spider.has_pressed_z=false
+	elseif scene_frame==290 then
+		spider.is_holding_right=false
+		spider.is_holding_left=true
+	elseif scene_frame==295 then
+		spider.is_holding_left=false
+	elseif scene_frame==350 then
+		spider.is_holding_left=true
+		spider.is_holding_down=true
+		spider.has_pressed_x=true
+	elseif scene_frame==357 then
+		spider.has_pressed_x=false
+		spider.is_holding_down=false
+	elseif scene_frame==380 then
+		spider.has_pressed_z=true
+		spider.is_holding_z=true
+	elseif scene_frame==381 then
+		spider.has_pressed_z=false
+	elseif scene_frame==430 then
+		spider.is_holding_down=true
+		spider.is_holding_z=false
+		spider.has_pressed_z=true
+	elseif scene_frame==432 then
+		spider.has_pressed_z=false
+	elseif scene_frame==460 then
+		spider.is_holding_down=false
+		spider.is_holding_left=false
+		spider.is_holding_up=true
+		spider.is_holding_right=true
+	elseif scene_frame==463 then
+		spider.is_holding_up=false
+		spider.is_holding_right=false
+	end
+
+	-- update the player spider
+	update_spider()
+
+	-- get rid of anything that isn't alive anymore
+	web_strands=filter_list(web_strands,check_for_web_strand_death)
+	web_points=filter_list(web_points,check_for_web_point_death)
+
+	if scene_frame>10 then
+		if btn(4) then
+			init_game()
+		elseif btn(5) then
+			init_tutorial()
+		end
+	end
+end
+
+function draw_tutorial()
+	print("how to play",42,14,7)
+	line(42,20,84,20,7)
+	if scene_frame>=70 and scene_frame<200 then
+		print("hold z to spin web",28,38,7)
+	elseif scene_frame>=220 and scene_frame<350 then
+		print("press z again to place",20,38,7)
+	elseif scene_frame>=370 and scene_frame<500 then
+		print("press x to toggle sticky web",8,38,7)
+	elseif scene_frame>=520 then
+		print("create webs to catch bugs",14,38,7)
+		print("bugs refill your webbing",16,46,7)
+	end
+	if scene_frame>10 then
+		if scene_frame<530 then
+			color(5)
+		else
+			color(7)
+		end
+		print("z - continue",10,110)
+		print("x - rewatch",70,110)
+	end
+
+	-- draw the web
+	foreach(web_strands,draw_web_strand)
+
+	-- draw the playable spider
+	draw_spider()
+
+	-- draw guidelines
+	-- camera()
+	-- line(0,0,0,127,8)
+	-- line(62,0,62,127,8)
+	-- line(65,0,65,127,8)
+	-- line(127,0,127,127,8)
+	-- line(0,0,127,0,8)
+	-- line(0,62,127,62,8)
+	-- line(0,65,127,65,8)
+	-- line(0,127,127,127,8)
+end
 
 -- constants
 levels={
@@ -168,16 +325,6 @@ web_types={
 
 
 -- all them functions
-function load_level(level_num)
-	game_frame=0
-	bg_color=levels[level_num].bg_color
-	reset_tiles()
-	load_tiles(levels[level_num].map,tilesets[levels[level_num].tileset])
-	web_points={}
-	web_strands={}
-	spider=create_spider(levels[level_num].spawn_point[1],levels[level_num].spawn_point[2])
-end
-
 function reset_tiles()
 	tiles={}
 	local c
@@ -255,7 +402,7 @@ function draw_tile(tile,col,row)
 	local y=8*row-8
 	spr(tile.sprite,x,y,1,1,tile.is_flipped)
 	-- uncomment to see terrain "hitboxes"
-	-- if game_frame%16<8 then
+	-- if scene_frame%16<8 then
 	-- 	local x2
 	-- 	for x2=0,3 do
 	-- 		local y2
@@ -275,10 +422,11 @@ function draw_tile(tile,col,row)
 	-- end
 end
 
-function create_spider(x,y)
+function create_spider(x,y,is_controllable)
 	return {
 		["x"]=x,
 		["y"]=y,
+		["is_controllable"]=is_controllable,
 		["vx"]=0,
 		["vy"]=0,
 		["facing_x"]=0,
@@ -300,6 +448,14 @@ function create_spider(x,y)
 		["bug_interact_dist"]=12,
 		["nearest_interactive_bug"]=nil,
 		["frames_since_walk_sound"]=99,
+		-- controls
+		["is_holding_left"]=false,
+		["is_holding_right"]=false,
+		["is_holding_up"]=false,
+		["is_holding_down"]=false,
+		["is_holding_z"]=false,
+		["has_pressed_z"]=false,
+		["has_pressed_x"]=false,
 		-- constants
 		["gravity"]=0.05,
 		["web_attract_dist"]=3,
@@ -313,6 +469,16 @@ end
 function update_spider()
 	if not spider.is_alive then
 		return
+	end
+
+	if spider.is_controllable then
+		spider.is_holding_left=btn(0)
+		spider.is_holding_right=btn(1)
+		spider.is_holding_up=btn(2)
+		spider.is_holding_down=btn(3)
+		spider.is_holding_z=btn(4)
+		spider.has_pressed_z=btnp(4)
+		spider.has_pressed_x=btnp(5)
 	end
 
 	spider.frames_since_walk_sound+=1
@@ -356,7 +522,7 @@ function update_spider()
 	end
 
 	-- poison/eat the nearest bug when z is pressed
-	if spider.nearest_interactive_bug and (spider.is_on_tile or spider.is_on_web) and not spider.is_spinning_web and btnp(4) then
+	if spider.nearest_interactive_bug and (spider.is_on_tile or spider.is_on_web) and not spider.is_spinning_web and spider.has_pressed_z then
 		if not spider.nearest_interactive_bug.is_poisoned then
 			spider.stationary_frames=15
 			spider.nearest_interactive_bug.is_poisoned=true
@@ -366,7 +532,7 @@ function update_spider()
 		end
 
 	-- start spinning web when z is first pressed
-	elseif not spider.attached_web_strand and btnp(4) and spider.webbing>0 then
+	elseif not spider.attached_web_strand and spider.has_pressed_z and spider.webbing>0 then
 		spider.webbing-=1
 		spider.is_spinning_web=true
 		spider.frames_to_web_spin=web_types[spider.web_type].physics.dist_between_points/2
@@ -382,11 +548,11 @@ function update_spider()
 		spider.spun_web_start_point=start_point
 
 	-- stop spinning web when z is released
-	elseif spider.is_spinning_web and not btn(4) then
+	elseif spider.is_spinning_web and not spider.is_holding_z then
 		spider.is_spinning_web=false
 
 	-- cut/place the end of the strand when z is pressed again
-	elseif spider.attached_web_strand and not spider.is_spinning_web and btnp(4) then
+	elseif spider.attached_web_strand and not spider.is_spinning_web and spider.has_pressed_z then
 		local end_point
 		local square_dist
 		end_point,square_dist=calc_closest_web_point(spider.x,spider.y,true,spider.spun_web_start_point.id,false)
@@ -403,7 +569,7 @@ function update_spider()
 	end
 
 	-- press x switch web types when not spinning
-	if not spider.is_spinning_web and btnp(5) then
+	if not spider.is_spinning_web and spider.has_pressed_x then
 		spider.web_type=1+(spider.web_type)%#web_types
 	end
 
@@ -413,16 +579,16 @@ function update_spider()
 		spider.vy=0
 		if spider.stationary_frames<=0 then
 			-- arrow keys move the spider
-			if btn(0) then
+			if spider.is_holding_left then
 				spider.vx-=spider.move_speed
 			end
-			if btn(1) then
+			if spider.is_holding_right then
 				spider.vx+=spider.move_speed
 			end
-			if btn(2) then
+			if spider.is_holding_up then
 				spider.vy-=spider.move_speed
 			end
-			if btn(3) then
+			if spider.is_holding_down then
 				spider.vy+=spider.move_speed
 			end
 			-- make sure you don't move faster when moving diagonally
@@ -518,7 +684,7 @@ function draw_spider()
 		end
 		-- clip through the spider's walk cycle
 		if (spider.is_on_tile or spider.is_on_web) and (spider.vx!=0 or spider.vy!=0) then
-			if game_frame%10>=5 then
+			if scene_frame%10>=5 then
 				sprite+=2
 			else
 				sprite+=1
@@ -788,7 +954,7 @@ function update_bug(bug)
 				bug.x=bug.caught_web_point.x
 				bug.y=bug.caught_web_point.y
 				-- the bug struggles to get free
-				if not bug.has_succumbed_to_poison and game_frame%4==0 and rnd(1)<0.4 then
+				if not bug.has_succumbed_to_poison and scene_frame%4==0 and rnd(1)<0.4 then
 					local dir=rnd(20)
 					if dir>15 then -- extra change of moving up
 						bug.caught_web_point.vy-=bug.strength
@@ -868,7 +1034,7 @@ function draw_bug(bug)
 	-- draw poison bubbles above the bug
 	if bug.is_poisoned and not bug.has_succumbed_to_poison then
 		local poison_sprite=11
-		if game_frame%30>15 then
+		if scene_frame%30>15 then
 			poison_sprite=12
 		end
 		spr(poison_sprite,bug.x-4,bug.y-8)
@@ -894,7 +1060,7 @@ function draw_ui()
 		else
 			sprite=45
 		end
-		if game_frame%30>15 then
+		if scene_frame%30>15 then
 			sprite+=1
 		end
 		spr(sprite,spider.nearest_interactive_bug.x-4,spider.nearest_interactive_bug.y-4)
@@ -929,6 +1095,9 @@ function is_solid_tile_at_spider()
 end
 
 function is_solid_tile_at(x,y)
+	if scene=="tutorial" then
+		return true
+	end
 	local c=1+flr(x/8)
 	local r=1+flr(y/8)
 	if tiles[c] and tiles[c][r] then
@@ -1053,7 +1222,7 @@ function calc_closest_spot_on_web(x,y,allow_freefalling)
 end
 
 function calc_sprite(anim,frame_rate)
-	return anim[1+flr(game_frame/frame_rate)%#anim]
+	return anim[1+flr(scene_frame/frame_rate)%#anim]
 end
 
 function ceil(n)
@@ -1069,13 +1238,13 @@ __gfx__
 0071717007717170007171770777170707771707007717070777717007777170077771700500777705000057000200000000000000dd7d000d2270d20d2270d2
 070707070007070707070700000770000007700007077000000707000007070000070700055005770550055000000000000000000007000000d70002a0d70702
 000000000000000000000000000707000007070000700700007000700070007000070700000000000000000000000000000000000077770000777700aa07070a
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000000000000000000000066006600000000000000000000000000006600000060000000dd000000000000000000000000000000000000000000000000000
-000000000060060000000000066cc660006cc600066ccc66000ccc00000cc000006cc00000022000000000000000000000000000000000000000000000000000
-00000000000cc000006cc60000cccc0006cccc6006ccccc600ccccc000cccc0000cccc0000222200000000000000000000000000000000000000000000000000
-0000c000000cc000000cc00000cccc0000cccc0000ccccc006ccccc600cccc6006cccc00002222d0000000000000000000000000000000000000000000000000
-000000000000000000000000000cc000000cc00000ccccc006ccccc6000cc600006cc00000022d00000000000000000000000000000000000000000000000000
-0000000000000000000000000000000000000000000ccc00006ccc60000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000aa0000000000000000000000000000000000000000000
+000000000000000000000000066006600000000000000000000000000006600000060000000dd000aaaa8a000000000000000000000000000000000000000000
+000000000060060000000000066cc660006cc600066ccc66000ccc00000cc000006cc00000022000a88888a00000000000000000000000000000000000000000
+00000000000cc000006cc60000cccc0006cccc6006ccccc600ccccc000cccc0000cccc0000222200a888888a0000000000000000000000000000000000000000
+0000c000000cc000000cc00000cccc0000cccc0000ccccc006ccccc600cccc6006cccc00002222d0a88888a00000000000000000000000000000000000000000
+000000000000000000000000000cc000000cc00000ccccc006ccccc6000cc600006cc00000022d00aaaa8a000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000000ccc00006ccc60000000000000000000000000000aa0000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fff00000ff0000000000000
