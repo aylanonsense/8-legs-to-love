@@ -3,17 +3,32 @@ version 8
 __lua__
 
 -- todo
--- flies shouldn't be able to be caught by sticky things that are anchored on tiles (no way to shake free)
 -- title screen / game over screen
 -- fix not always being able to attach web to web
 -- fix unbreakable traps by laying sticky web on top of structural web
 -- one bug per web point
--- envenom animation
 
--- todo sounds
---   jump
---   envenom
---   walk
+-- there is a timer counting down
+-- eating bugs restores that counter
+-- you eat bugs just by moving over them
+-- you can eat bugs even if they aren't caught in the web
+
+-- bugs
+-- dragonfly shoots fireballs
+-- firefly explodes
+-- goldenfly is worth more
+-- gnawing fly will chew through the strand it is stuck on
+-- hornets will hit you if they are not caught
+-- fly just struggles
+-- bugs start as a *ping* in the distance and look juicy
+-- getting hit knocks you towards the center and makes you unable to grab anything for some frames
+
+-- todo
+-- create bugs
+--  they spawn with a flash
+--  they have a circle that encloses them as they spawn
+--  they alternate between flying sprites
+--  
 
 -- game vars
 tile_symbols='abcdefghijklmnopqrstuvwxyz0123456789'
@@ -30,8 +45,7 @@ tiles={}
 
 -- main functions
 function _init()
-	-- init_game()
-	init_tutorial()
+	init_game()
 end
 
 function _update()
@@ -66,13 +80,10 @@ function init_game()
 	web_points={}
 	web_strands={}
 	spider=create_spider(levels[1].spawn_point[1],levels[1].spawn_point[2],true)
+	create_beetle(50,50)
 end
 
 function update_game()
-	if scene_frame%10==0 and rnd(1)<0.1 then
-		create_fly()
-	end
-
 	-- update the web
 	foreach(web_strands,update_web_strand)
 	foreach(web_points,update_web_point)
@@ -92,11 +103,9 @@ end
 function draw_game()
 	camera(0,-8)
 
-	-- draw bugs in the background
+	-- draw bugs
 	foreach(bugs,function(bug)
-		if bug.z<0 then
-			draw_bug(bug)
-		end
+		draw_bug_bg(bug)
 	end)
 
 	-- draw tiles
@@ -105,22 +114,13 @@ function draw_game()
 	-- draw the web
 	foreach(web_strands,draw_web_strand)
 
-	-- draw bugs in the foreground
+	-- draw bugs
 	foreach(bugs,function(bug)
-		if bug.z==0 then
-			draw_bug(bug)
-		end
+		draw_bug(bug)
 	end)
 
 	-- draw the playable spider
 	draw_spider()
-
-	-- draw bugs in the far foreground
-	foreach(bugs,function(bug)
-		if bug.z>0 then
-			draw_bug(bug)
-		end
-	end)
 
 	-- draw the ui
 	camera()
@@ -148,51 +148,64 @@ function update_tutorial()
 	elseif scene_frame==45 then
 		spider.is_holding_right=false
 		spider.is_holding_down=false
+	elseif scene_frame==60 then
+		spider.is_holding_right=true
 	elseif scene_frame==80 then
+		spider.is_holding_right=false
+		spider.is_holding_left=true
+	elseif scene_frame==100 then
+		spider.is_holding_left=false
+		spider.is_holding_down=true
+	elseif scene_frame==120 then
+		spider.is_holding_down=false
+		spider.is_holding_up=true
+	elseif scene_frame==140 then
+		spider.is_holding_up=false
+	elseif scene_frame==200 then
 		spider.is_holding_z=true
 		spider.has_pressed_z=true
 		spider.is_holding_right=true
-	elseif scene_frame==81 then
+	elseif scene_frame==201 then
 		spider.has_pressed_z=false
-	elseif scene_frame==100 then
+	elseif scene_frame==220 then
 		spider.is_holding_right=false
-	elseif scene_frame==130 then
+	elseif scene_frame==250 then
 		spider.is_holding_z=false
-	elseif scene_frame==200 then
+	elseif scene_frame==320 then
 		spider.is_holding_right=true
-	elseif scene_frame==270 then
+	elseif scene_frame==390 then
 		spider.has_pressed_z=true
-	elseif scene_frame==271 then
+	elseif scene_frame==391 then
 		spider.has_pressed_z=false
-	elseif scene_frame==290 then
+	elseif scene_frame==410 then
 		spider.is_holding_right=false
 		spider.is_holding_left=true
-	elseif scene_frame==295 then
+	elseif scene_frame==415 then
 		spider.is_holding_left=false
-	elseif scene_frame==350 then
+	elseif scene_frame==470 then
 		spider.is_holding_left=true
 		spider.is_holding_down=true
 		spider.has_pressed_x=true
-	elseif scene_frame==357 then
+	elseif scene_frame==477 then
 		spider.has_pressed_x=false
 		spider.is_holding_down=false
-	elseif scene_frame==380 then
+	elseif scene_frame==500 then
 		spider.has_pressed_z=true
 		spider.is_holding_z=true
-	elseif scene_frame==381 then
+	elseif scene_frame==501 then
 		spider.has_pressed_z=false
-	elseif scene_frame==430 then
+	elseif scene_frame==550 then
 		spider.is_holding_down=true
 		spider.is_holding_z=false
 		spider.has_pressed_z=true
-	elseif scene_frame==432 then
+	elseif scene_frame==552 then
 		spider.has_pressed_z=false
-	elseif scene_frame==460 then
+	elseif scene_frame==580 then
 		spider.is_holding_down=false
 		spider.is_holding_left=false
 		spider.is_holding_up=true
 		spider.is_holding_right=true
-	elseif scene_frame==463 then
+	elseif scene_frame==583 then
 		spider.is_holding_up=false
 		spider.is_holding_right=false
 	end
@@ -216,21 +229,23 @@ end
 function draw_tutorial()
 	print("how to play",42,14,7)
 	line(42,20,84,20,7)
-	if scene_frame>=70 and scene_frame<200 then
+	if scene_frame>=50 and scene_frame<170 then
+		print("use arrow keys to move",20,38,7)
+	elseif scene_frame>=190 and scene_frame<320 then
 		print("hold z to spin web",28,38,7)
-	elseif scene_frame>=220 and scene_frame<350 then
+	elseif scene_frame>=340 and scene_frame<470 then
 		print("press z again to place",20,38,7)
-	elseif scene_frame>=370 and scene_frame<500 then
+	elseif scene_frame>=490 and scene_frame<620 then
 		print("press x to toggle sticky web",8,38,7)
-	elseif scene_frame>=520 then
-		print("create webs to catch bugs",14,38,7)
-		print("bugs refill your webbing",16,46,7)
+		print("(used to catch bugs)",24,46,7)
+	elseif scene_frame>=640 then
+		print("catch as many bugs as you can!",4,38,7)
 	end
 	if scene_frame>10 then
-		if scene_frame<530 then
-			color(5)
-		else
+		if scene_frame>=640 then
 			color(7)
+		else
+			color(5)
 		end
 		print("z - continue",10,110)
 		print("x - rewatch",70,110)
@@ -426,7 +441,6 @@ function create_spider(x,y,is_controllable)
 	return {
 		["x"]=x,
 		["y"]=y,
-		["is_controllable"]=is_controllable,
 		["vx"]=0,
 		["vy"]=0,
 		["facing_x"]=0,
@@ -449,6 +463,7 @@ function create_spider(x,y,is_controllable)
 		["nearest_interactive_bug"]=nil,
 		["frames_since_walk_sound"]=99,
 		-- controls
+		["is_controllable"]=is_controllable,
 		["is_holding_left"]=false,
 		["is_holding_right"]=false,
 		["is_holding_up"]=false,
@@ -521,18 +536,8 @@ function update_spider()
 		mark_all_points_as_not_being_spun()
 	end
 
-	-- poison/eat the nearest bug when z is pressed
-	if spider.nearest_interactive_bug and (spider.is_on_tile or spider.is_on_web) and not spider.is_spinning_web and spider.has_pressed_z then
-		if not spider.nearest_interactive_bug.is_poisoned then
-			spider.stationary_frames=15
-			spider.nearest_interactive_bug.is_poisoned=true
-		else
-			spider.nearest_interactive_bug.is_alive=false
-			spider.webbing=min(spider.webbing+12,spider.max_webbing)
-		end
-
 	-- start spinning web when z is first pressed
-	elseif not spider.attached_web_strand and spider.has_pressed_z and spider.webbing>0 then
+	if not spider.attached_web_strand and spider.has_pressed_z and spider.webbing>0 then
 		spider.webbing-=1
 		spider.is_spinning_web=true
 		spider.frames_to_web_spin=web_types[spider.web_type].physics.dist_between_points/2
@@ -575,6 +580,7 @@ function update_spider()
 
 	-- move the spider while on tile or web
 	if spider.is_on_tile or spider.is_on_web then
+		-- todo slowly reduce velocity
 		spider.vx=0
 		spider.vy=0
 		if spider.stationary_frames<=0 then
@@ -618,31 +624,6 @@ function update_spider()
 	-- finally, apply that velocity
 	spider.x+=spider.vx
 	spider.y+=spider.vy
-
-	-- find nearest bug
-	spider.nearest_interactive_bug=nil
-	local nearest_bug_square_dist=nil
-	foreach(bugs,function(bug)
-		local square_dist=calc_square_dist_between_points(spider.x,spider.y,bug.x,bug.y)
-		if bug.is_alive and bug.caught_web_point and (not bug.is_poisoned or bug.has_succumbed_to_poison) and square_dist<=spider.bug_interact_dist*spider.bug_interact_dist then
-			if not spider.nearest_interactive_bug or square_dist<nearest_bug_square_dist then
-				spider.nearest_interactive_bug=bug
-				nearest_bug_square_dist=square_dist
-			end
-		end
-	end)
-
-	-- spider.nearest_interactive_bug=nil
-	-- local nearest_bug_square_dist=nil
-	-- foreach(bugs,function(bug)
-	-- 	-- local square_dist=calc_square_dist_between_points(spider.x,spider.y,bug.x,bug.y)
-	-- 	-- if bug.is_alive and bug.caught_web_point and -- not bug.is_poisoned and
-	-- 	-- 	-- square_dist<=spider.bug_interact_dist*spider.bug_interact_dist and
-	-- 	-- 	not spider.nearest_interactive_bug or square_dist<nearest_bug_square_dist then
-	-- 	-- 	-- spider.nearest_interactive_bug=bug
-	-- 	-- 	-- nearest_bug_square_dist=square_dist
-	-- 	-- end
-	-- end)
 
 	-- keep track of which direction the spider is facing
 	if spider.vx!=0 or spider.vy!=0 then
@@ -883,162 +864,126 @@ function check_for_web_strand_death(web_strand)
 	return web_strand.is_alive
 end
 
-function create_fly()
-	local x
-	local y
-	x,y=find_random_blank_spot()
-	local fly={
-		["species"]="fly",
+function create_fly(x,y)
+	create_bug(x,y,{64},{12,13,5,1})
+end
+
+function create_firefly(x,y)
+	create_bug(x,y,{80},{9,4,2,1})
+end
+
+function create_dragonfly(x,y)
+	create_bug(x,y,{96},{11,3,5,1})
+end
+
+function create_hornet(x,y)
+	create_bug(x,y,{112},{10,15,4,2})
+end
+
+function create_beetle(x,y)
+	create_bug(x,y,{124},{8,13,5,2})
+end
+
+function create_bug(x,y,sprites,colors)
+	local bug={
 		["x"]=x,
-		["y"]=y-9,
-		["z"]=-80,
+		["y"]=y,
 		["vx"]=0,
-		["vy"]=0.1,
-		["vz"]=1,
+		["vy"]=0,
 		["is_alive"]=true,
-		["is_poisoned"]=false,
-		["has_succumbed_to_poison"]=false,
-		["frames_poisoned"]=0,
-		["frames_caught"]=0,
-		["caught_web_point"]=nil,
-		-- constants
-		["animation"]={
-			["distant"]={16},
-			["far"]={17,18},
-			["mid"]={19,20},
-			["close"]={21,22},
-			["caught"]={23,24,23,23,20,24},
-			["succumbed"]={25}
-		},
-		["strength"]=0.5,
-		["max_strength"]=2.5,
-		["web_catch_dist"]=5,
-		["frame_rate"]=4
+		["sprites"]=sprites,
+		["colors"]=colors,
+		["state"]="spawning",
+		["state_frames"]=0
 	}
-	add(bugs,fly)
-	return fly
+	add(bugs,bug)
+	return bug
 end
 
 function update_bug(bug)
-	-- accelerate upwards at the end
-	if bug.z>20 then
-		bug.vy-=0.1
+	bug.state_frames+=1
+
+	-- transition between states
+	if bug.state=="spawning" and bug.state_frames>15 then
+		bug.state="incoming"
+		bug.state_frames=0
+		bug.vy=0.5
+	elseif bug.state=="incoming" and bug.state_frames>30 then
+		bug.state="active"
+		bug.state_frames=0
+	elseif bug.state=="active" and bug.state_frames>50 then
+		bug.state="escaping"
+		bug.state_frames=0
+	elseif bug.state=="escaping" and bug.state_frames>30 then
+		bug.is_alive=false
 	end
 
-	-- bugs grow stronger over time, or weaker over time when poisoned
-	if bug.caught_web_point and bug.frames_caught%30==0 then
-		if bug.is_poisoned then
-			bug.strength=max(0,bug.strength-0.25)
-			if bug.strength<0.5 then
-				bug.frame_rate=45
-			end
-		else
-			bug.strength=min(bug.strength+0.125,bug.max_strength)
-		end
-	end
-
-	-- once the bug is fully drained, it will succumb to the poison
-	if bug.is_poisoned and not bug.has_succumbed_to_poison then
-		bug.frames_poisoned+=1
-		if bug.frames_poisoned>120 and bug.strength<=0 then
-			bug.has_succumbed_to_poison=true
-		end
-	end
-
-	-- once the bug enters the foreground, it can be caught
-	if 0<=bug.z and bug.z<20 then
-		if bug.caught_web_point then
-			-- the bug is still caught in the web
-			if bug.caught_web_point.is_alive then
-				bug.frames_caught+=1
-				bug.x=bug.caught_web_point.x
-				bug.y=bug.caught_web_point.y
-				-- the bug struggles to get free
-				if not bug.has_succumbed_to_poison and scene_frame%4==0 and rnd(1)<0.4 then
-					local dir=rnd(20)
-					if dir>15 then -- extra change of moving up
-						bug.caught_web_point.vy-=bug.strength
-					elseif dir>10 then -- extra chance of moving up and to the left
-						bug.caught_web_point.vx-=bug.strength*0.7
-						bug.caught_web_point.vy-=bug.strength*0.7
-					elseif dir>5 then -- extra chance of moving up and to the right
-						bug.caught_web_point.vx+=bug.strength*0.7
-						bug.caught_web_point.vy-=bug.strength*0.7
-					elseif dir>4 then
-						bug.caught_web_point.vx-=bug.strength*0.7
-						bug.caught_web_point.vy+=bug.strength*0.7
-					elseif dir>3 then
-						bug.caught_web_point.vx+=bug.strength*0.7
-						bug.caught_web_point.vy+=bug.strength*0.7
-					elseif dir>2 then
-						bug.caught_web_point.vx+=bug.strength
-					elseif dir>1 then
-						bug.caught_web_point.vx-=bug.strength
-					else
-						bug.caught_web_point.vy+=bug.strength
-					end
-				end
-			-- the bug goes poof if it dies and the web it's on breaks
-			elseif bug.has_succumbed_to_poison then
-				bug.is_alive=false
-			-- the bug got away
-			else
-				bug.caught_web_point=nil
-				bug.vz=1
-				bug.z=20
-			end
-		else
-			local web_point
-			local square_dist
-			web_point,square_dist=calc_closest_web_point(bug.x,bug.y,true,nil,true)
-			-- the bug got caught in the web
-			if web_point and square_dist<=bug.web_catch_dist*bug.web_catch_dist then
-				bug.caught_web_point=web_point
-				bug.x=web_point.x
-				bug.y=web_point.y
-				bug.z=0
-				bug.vx=0
-				bug.vy=0
-				bug.vz=0
-			end
-		end
+	-- apply acceleration
+	bug.vy-=0.0095
+	if bug.state=="escaping" then
+		bug.vy-=0.05
 	end
 
 	-- apply velocity
 	bug.x+=bug.vx
 	bug.y+=bug.vy
-	bug.z+=bug.vz
 	
 	-- if the bug goes out of bounds, it's dead
-	if bug.x<-8 or bug.x>135 or bug.y<-16 or bug.y>127 then
+	if bug.x<-8 or bug.x>127 or bug.y<-8 or bug.y>127 then
 		bug.is_alive=false
 	end
 end
 
-function draw_bug(bug)
-	local anim
-	if bug.has_succumbed_to_poison then
-		anim=bug.animation.succumbed
-	elseif bug.caught_web_point then
-		anim=bug.animation.caught
-	elseif bug.z<-40 then
-		anim=bug.animation.distant
-	elseif bug.z<0 then
-		anim=bug.animation.far
-	elseif bug.z<40 then
-		anim=bug.animation.mid
-	else
-		anim=bug.animation.close
-	end
-	spr(calc_sprite(anim,bug.frame_rate),bug.x-4,bug.y-4)
-	-- draw poison bubbles above the bug
-	if bug.is_poisoned and not bug.has_succumbed_to_poison then
-		local poison_sprite=11
-		if scene_frame%30>15 then
-			poison_sprite=12
+function draw_bug_bg(bug)
+	local r=0
+	if bug.state=="incoming" then
+		r=7+(30-bug.state_frames)/2
+		if(bug.state_frames<15) then
+			color(bug.colors[4])
+		else
+			color(bug.colors[2])
 		end
-		spr(poison_sprite,bug.x-4,bug.y-8)
+	elseif bug.state=="active" then
+		r=7
+		color(bug.colors[1])
+	elseif bug.state=="escaping" then
+		r=7+bug.state_frames
+		if bug.state_frames<7 then
+			color(bug.colors[2])
+		elseif bug.state_frames<14 then
+			color(bug.colors[4])
+		else
+			r=0
+		end
 	end
+	if r>0 then
+		circ(bug.x+3,bug.y+4,r)
+	end
+end
+
+function draw_bug(bug)
+	local sprites
+	local s=bug.sprites[1]
+	local c=bug.colors
+	if bug.state=="spawning" then
+		sprites={11,12,13,14,15}
+		set_single_color(c[1])
+	elseif bug.state=="incoming" then
+		sprites={s,s+1}
+	elseif bug.state=="active" then
+		sprites={s+2,s+3}
+	elseif bug.state=="escaping" then
+		sprites={s+2,s+3}
+		if bug.state_frames<10 then
+			set_single_color(c[2])
+		elseif bug.state_frames<20 then
+			set_single_color(c[3])
+		else
+			set_single_color(c[4])
+		end
+	end
+	spr(sprites[flr(bug.state_frames/3)%#sprites+1],bug.x,bug.y)
+	pal()
 end
 
 function draw_ui()
@@ -1050,21 +995,12 @@ function draw_ui()
 	end
 	rectfill(1,2,1+spider.webbing,5)
 	rect(1,1,2+spider.max_webbing,6)
-	spr(web_types[spider.web_type].render.icon_sprite,49,0)
-
-	-- draw prompt over the nearest caught bug
-	if spider.nearest_interactive_bug then
-		local sprite
-		if not spider.nearest_interactive_bug.is_poisoned then
-			sprite=13
-		else
-			sprite=45
-		end
-		if scene_frame%30>15 then
-			sprite+=1
-		end
-		spr(sprite,spider.nearest_interactive_bug.x-4,spider.nearest_interactive_bug.y-4)
+	if spider.is_spinning_web then
+		color(7)
+	else
+		color(5)
 	end
+	spr(web_types[spider.web_type].render.icon_sprite,49,0)
 end
 
 
@@ -1229,31 +1165,22 @@ function ceil(n)
 	return -flr(-n)
 end
 
+function set_single_color(c)
+	local i
+	for i=1,15 do
+		pal(i,c)
+	end
+end
+
 __gfx__
-0000700000007000000070000000000000000000000000000000000000000000000000000000000000000000000000000000000000dddd0000000000aa00aaaa
-00077700000777000007770007770700077700700777070000700070000707000070007077500550055005500000000000200000000dd00000dd0000a0dd0a0a
-0707770700077707070777000777770007777707077777000007070000070700000707007777005007000050000002000222000000d22d000d22d0d00d22d0d0
-007777700777777000777777077777770777777007777777077771700777717007777170777777000007000000020000002000000d2222d00d222dd00d2727d0
-000777000007770000077700007771700077717000777170777777007777770077777700007777770000070000202000000002000d7777d00d7777d00d2727d0
-0071717007717170007171770777170707771707007717070777717007777170077771700500777705000057000200000000000000dd7d000d2270d20d2270d2
-070707070007070707070700000770000007700007077000000707000007070000070700055005770550055000000000000000000007000000d70002a0d70702
-000000000000000000000000000707000007070000700700007000700070007000070700000000000000000000000000000000000077770000777700aa07070a
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000aa0000000000000000000000000000000000000000000
-000000000000000000000000066006600000000000000000000000000006600000060000000dd000aaaa8a000000000000000000000000000000000000000000
-000000000060060000000000066cc660006cc600066ccc66000ccc00000cc000006cc00000022000a88888a00000000000000000000000000000000000000000
-00000000000cc000006cc60000cccc0006cccc6006ccccc600ccccc000cccc0000cccc0000222200a888888a0000000000000000000000000000000000000000
-0000c000000cc000000cc00000cccc0000cccc0000ccccc006ccccc600cccc6006cccc00002222d0a88888a00000000000000000000000000000000000000000
-000000000000000000000000000cc000000cc00000ccccc006ccccc6000cc600006cc00000022d00aaaa8a000000000000000000000000000000000000000000
-0000000000000000000000000000000000000000000ccc00006ccc60000000000000000000000000000aa0000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fff00000ff0000000000000
-000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009ffff0009f00000000000000
-000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003bbbb0003b00000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000247777002477770000000000
-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000099ff700099f0700000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000700000007000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007777000077770000000000
+00007000000070000000700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00077700000777000007770007770700077700700777070000700070000707000070007077500550055005500000000000070000000007000000000000000000
+07077707000777070707770007777700077777070777770000070700000707000007070077770050070000500700000000070000700770000000000000000000
+00777770077777700077777707777777077777700777777707777170077771700777717077777700000700000077000000770000077770000007077000070000
+00077700000777000007770000777170007771700077717077777700777777007777770000777777000007000077700007777700007770000077700007777700
+00717170077171700071717707771707077717070077170707777170077771700777717005007777050000570007700000077000007777007707000000070000
+07070707000707070707070000077000000770000707700000070700000707000007070005500577055005500000070000070000007700700000000000000000
+00000000000000000000000000070700000707000070070000700070007000700007070000000000000000000000000000070000070000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -1280,20 +1207,36 @@ __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000000007707700000000000d06600000d6600000660000000000000000000000000000000000000000000000000000000000000000000000000000
+007007000000000006ccc60007ccc70000cdc00000cdc00000dcc000000000000000000000000000000000000000000000000000000000000000000000000000
+000cc000007cc70000dcd00006dcd6000cccc0000cccc0000dccd600000000000000000000000000000000000000000000000000000000000000000000000000
+000cc000000cc00000ccc00000ccc00000cdc60000cdc00000ccc600000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000d0c0d000d0c0d0000d066000d0660000c00d000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000020022000000000000000000080088000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000066020004440000006602000066080004440000006608000000000000000000000000000000000000000000000000
+00000000000000000099900000999000009942400092442200999602008842400082448800888608000000000000000000000000000000000000000000000000
+70aa070000aa000022aaa22022aaa22009aa444009a4420009aaa424088944400894420008899424000000000000000000000000000000000000000000000000
+0a44a0000a44a0007a444a700a444a0009aa424009aaa96009aaa444089942400899986008999444000000000000000000000000000000000000000000000000
+0944900079449700092429006924296009aaa90209aaa96009aaa424088998080889886008899424000000000000000000000000000000000000000000000000
+00000000000000000044400070444070009996020099900000999602008886080088800000888608000000000000000000000000000000000000000000000000
+00000000000000000400040004000400000000000000000000006602000000000000000000006608000000000000000000000000000000000000000000000000
+00000000000000000033000000330000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0033000000330000003b0000003b00000005bb600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+703b0700003b0000703300700033000000035bb00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+073b7000003b0000673b0760003b00000050b3660000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00bb000007bb700006bbb60007bbb700000033b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0033000070330700035b5000765b5670003333000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000033300060333060003bb3000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000500050005000500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000500050005000500005000500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+005050000050500070aaa07000aaa000660aaa000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+075a5700005a5000675a5760005a500066a5a5000000000000000000000000000000000000000000000000000000000000828000078287007782877000828000
+069a9600079a9700069a9600079a97000aa9a9000000000000000000000000000000000000000000000000000000000007828700068286006682866077828770
+00555000065556000055500076555670055500000000000000000000000000000000000000000000000000000000000006888600008880000828280066282660
+00a7a00000a7a00000a9a00060a9a0600aaa500000000000000000000000000000000000000000000000000000000000000000000000000050e8e05050e8e050
+0006000000060000005750000057500000a5d0000000000000000000000000000000000000000000000000000000000000000000000000000080800000808000
+00000000000000000006000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000000000002222200004499000044990004000400000449000033bb3bb3bbbb0000000333b333bb333b33b34444444499999999999999999999999933b3bb33
 000000000022242400004499000049440000404900004444000033b33bbbbbbb0000033b3bbbbbbbbbbbbb304442444422222222999999999999999933b33b3b
 22222222222242420000494400004499000404490044449900003bb33b3bbb3b000333bbbbbbbbbbb33b3300444444444242424299999999999944993bb3bb33
