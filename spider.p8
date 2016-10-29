@@ -2,28 +2,6 @@ pico-8 cartridge // http://www.pico-8.com
 version 8
 __lua__
 
--- bugs spawn in patterns
--- level has natural bug spawn acceleration to it
-
--- dragonfly shoots fireballs
--- firefly makes explosion effect
--- spider gets knocked back from explosions and fireballs
--- spider has animation for being knocked back
--- hornet puts spider in hitstun
--- hornet has special spawn "circle"
-
--- dragonfly fireball sound
--- firefly explosion sound
--- beetle eating sound
--- spider chomp sound
--- spider spinning web sound
--- spider hitstun sound effect
--- bug spawn sound
--- bug escape sound
-
--- fix unbreakable traps by laying sticky web on top of structural web
-
-
 -- game vars
 tile_symbols="abcdefghijklmnopqrstuvwxyz0123456789"
 tile_flip_matrix={8,4,2,1,128,64,32,16}
@@ -33,9 +11,11 @@ bg_color=0
 score=0
 visible_score=0
 timer=0
+level_num=0
 bugs_eaten=0
 visible_bugs_eaten=0
 spider=nil
+is_in_building_phase=false
 bugs={}
 effects={}
 web_points={}
@@ -45,17 +25,21 @@ tiles={}
 
 -- main functions
 function _init()
-	-- init_game()
-	init_title()
+	-- init_title()
+	init_game()
 	-- init_game_over()
 end
 
 function _update()
 	scene_frame+=1
+	if scene_frame>240*60 then
+		scene_frame=180*60
+	end
 	if scene=="title" then
 		update_title()
 	elseif scene=="game" then
 		update_game()
+		-- update_game()
 	elseif scene=="tutorial" then
 		update_tutorial()
 	elseif scene=="game_over" then
@@ -121,8 +105,10 @@ function draw_title()
 	line(73,64,73,80,7)
 	spr(13,69,81)
 	if scene_frame%30<20 then
-		print("press z to start",32,110,7)
+		print("press z to play demo",24,106,7)
 	end
+	print("@bridgs_dev",4,122,13)
+	print("www.brid.gs",81,122,13)
 	-- spr(6,1,1)
 	-- line(0,0,0,10,7)
 	-- line(0,0,10,0,7)
@@ -133,32 +119,63 @@ end
 function init_game()
 	scene="game"
 	scene_frame=0
+	level_num=1
 	score=0
-	timer=500--3600
-	bg_color=levels[1].bg_color
+	timer=20--61*30-1
+	is_in_building_phase=true
+	bg_color=levels[level_num].bg_color
 	reset_tiles()
-	load_tiles(levels[1].map,tilesets[levels[1].tileset])
+	load_tiles(levels[level_num].map,tilesets[levels[level_num].tileset])
 	bugs={}
 	effects={}
 	web_points={}
 	web_strands={}
-	spider=create_spider(levels[1].spawn_point[1],levels[1].spawn_point[2],true)
+	spider=create_spider(levels[level_num].spawn_point[1],levels[level_num].spawn_point[2],true)
 end
 
 function update_game()
 	timer-=1
 	if timer<0 then
-		init_game_over()
-		return
+		if is_in_building_phase then
+			is_in_building_phase=false
+			timer=61*30-1
+			create_announcement_effect("catch bugs!")
+		else
+			init_game_over()
+			return
+		end
 	end
 
-	if scene_frame%100==0 then
-		create_fly(50,50)
-		create_firefly(50,70)
-		create_dragonfly(70,70)
-		create_hornet(70,50)
-		create_beetle(60,40)
+	if scene_frame==60 and is_in_building_phase then
+		create_announcement_effect("build a web!")
 	end
+
+	local level=levels[level_num]
+	if not is_in_building_phase then
+		foreach(level.bug_spawns,function(spawn)
+			if timer/30==spawn[1]+1 then
+				create_bug_spawner(4+8*(level.center_point[1]+spawn[2]),4+8*(level.center_point[2]+spawn[3]),spawn[4],spawn[5] or 1,spawn[6] or 0,spawn[7] or 0)
+			end
+			-- local t=timer/30
+			-- local spawn_type=spawn[4]
+			-- local spawn_time=spawn[1]
+			-- if spawn_type=="single" and spawn_time==t then
+
+			-- if spawn[1]==t then
+			-- 	if spawn[4]=="single" then
+			-- 		create_bug_of_species(spawn[5],8*level.center_point[1]+spawn[2],8*level.center_point[2]+spawn[3])
+			-- 	end
+			-- end
+		end)
+	end
+
+	-- if scene_frame%100==0 then
+	-- 	create_fly(50,50)
+	-- 	create_firefly(50,70)
+	-- 	create_dragonfly(70,70)
+	-- 	create_hornet(70,50)
+	-- 	create_beetle(60,40)
+	-- end
 
 	-- update the web
 	foreach(web_strands,update_web_strand)
@@ -324,8 +341,7 @@ function draw_tutorial()
 	elseif scene_frame>=340 and scene_frame<470 then
 		print("press z again to place",20,38,7)
 	elseif scene_frame>=490 and scene_frame<620 then
-		print("press x to toggle sticky web",8,38,7)
-		print("(used to catch bugs)",24,46,7)
+		print("use strands to make a web",14,38,7)
 	elseif scene_frame>=640 then
 		print("catch as many bugs as you can!",4,38,7)
 	end
@@ -354,6 +370,7 @@ function init_game_over()
 	visible_bugs_eaten=0
 	visible_score=0
 end
+
 function update_game_over()
 	if (btnp(4) or btnp(5)) and scene_frame>=20 then
 		if visible_bugs_eaten<bugs_eaten or visible_score<score then
@@ -364,14 +381,15 @@ function update_game_over()
 		end
 	end
 
-	if scene_frame>=20 then
+	if scene_frame>=20 and scene_frame%2==0 then
 		if visible_bugs_eaten<bugs_eaten then
 			visible_bugs_eaten=min(bugs_eaten,visible_bugs_eaten+1)
 		elseif visible_score<score then
-			visible_score=min(score,visible_score+100)
+			visible_score=min(score,visible_score+1)
 		end
 	end
 end
+
 function draw_game_over()
 	print("game over",46,14,7)
 	line(46,20,80,20,7)
@@ -379,12 +397,12 @@ function draw_game_over()
 	print("final score",15,58,7)
 	if scene_frame>=20 then
 		if visible_score>=score and visible_bugs_eaten<=bugs_eaten then
-			print("thank you for playing!",20,85,7)
-			print("press z to restart",28,95,13)
-			spr(13,60,110)
+			print("thank you for playing!",20,79,7)
+			print("press z to restart",28,89,13)
+			spr(13,60,104)
 			if scene_frame%30<20 then
-				spr(60,67,107)
-				pset(65,115,7)
+				spr(60,67,101)
+				pset(65,109,7)
 			end
 		end
 		-- draw score
@@ -401,6 +419,8 @@ function draw_game_over()
 			print(score_text,110-4*#score_text,58,7)
 		end
 	end
+	print("@bridgs_dev",4,122,13)
+	print("www.brid.gs",81,122,13)
 end
 
 -- constants
@@ -425,6 +445,27 @@ levels={
 			"g200j      g003j",
 			"cyyydaaaaaacyyyd",
 			"wwwwwwwwwwwwwwww"
+		},
+		["center_point"]={8,7},
+		["bug_spawns"]={
+			{58,   -3,   -2, "fly",       3,    2,    2},
+			{52,   -3,   -3, "fly",       3,    2,    0},
+			{47,   -3,    3, "fly",       3,    2,    0},
+			{42,    1,   -5, "fly",       4,    0,    2},
+			{39,   -2,   -2, "fly",       4,    0,    2},
+			{34,    0,    0, "beetle"                  },
+			{29,   -3,   -3, "fly",       5,    1,    1},
+			{28,   -3,    2, "beetle"                  },
+			{27,    2,   -3, "beetle"                  },
+			{22,   -3,    3, "fly",       2,    1,   -1},
+			{21,   -1,    1, "beetle"                  },
+			{20,    0,    2, "fly",       2,    1,   -1},
+			{19,    2,    0, "beetle"                  },
+			{18,    0,   -1, "fly",       2,    1,   -1},
+			{17,    2,   -3, "beetle"                  },
+			{10, -2.5, -2.5, "firefly",   2,    5,    0},
+			{9,     0,    0, "firefly",   2, -2.5,  2.5},
+			{8,   2.5,  2.5, "firefly"                 }
 		}
 	}
 }
@@ -445,31 +486,32 @@ web_types={
 			["break_ratio"]=5.00,
 			["detatch_from_tile_ratio"]=10.00, -- won't happen
 			["spring_force"]=0.25,
-			["is_sticky"]=false,
+			["is_sticky"]=true,
 		},
 		["render"]={
 			["icon_sprite"]=62,
 			["is_dashed"]=false
 		}
-	},
-	{
-		["physics"]={
-			["initial_speed"]=1,
-			["initial_tautness"]=0.00,
-			["dist_between_points"]=5,
-			["gravity"]=0.02,
-			["friction"]=0.05,
-			["elasticity"]=0.60,
-			["break_ratio"]=4.00,
-			["detatch_from_tile_ratio"]=2.00,
-			["spring_force"]=0.2,
-			["is_sticky"]=true,
-		},
-		["render"]={
-			["icon_sprite"]=63,
-			["is_dashed"]=true
-		}
 	}
+	-- ,
+	-- {
+	-- 	["physics"]={
+	-- 		["initial_speed"]=1,
+	-- 		["initial_tautness"]=0.00,
+	-- 		["dist_between_points"]=5,
+	-- 		["gravity"]=0.02,
+	-- 		["friction"]=0.05,
+	-- 		["elasticity"]=0.60,
+	-- 		["break_ratio"]=4.00,
+	-- 		["detatch_from_tile_ratio"]=2.00,
+	-- 		["spring_force"]=0.2,
+	-- 		["is_sticky"]=true,
+	-- 	},
+	-- 	["render"]={
+	-- 		["icon_sprite"]=63,
+	-- 		["is_dashed"]=true
+	-- 	}
+	-- }
 }
 
 
@@ -591,8 +633,8 @@ function create_spider(x,y,is_controllable)
 		["hitstun"]=0,
 		["is_spinning_web"]=false,
 		["is_web"]=false,
-		["webbing"]=55,
-		["max_webbing"]=55,
+		["webbing"]=110,
+		["max_webbing"]=110,
 		["stationary_frames"]=0,
 		["bug_interact_dist"]=12,
 		["nearest_interactive_bug"]=nil,
@@ -668,6 +710,7 @@ function update_spider()
 			create_web_strand(spider.attached_web_strand.end_obj,mid_point)
 			spider.attached_web_strand.is_alive=false
 			spider.attached_web_strand=create_web_strand(spider,mid_point)
+			sfx(3,2)
 		end
 	end
 
@@ -686,7 +729,7 @@ function update_spider()
 		spider.frames_to_web_spin=web_types[spider.web_type].physics.dist_between_points/2
 		local start_point
 		local square_dist
-		start_point,square_dist=calc_closest_web_point(spider.x,spider.y,true,nil,false)
+		start_point,square_dist=calc_closest_web_point(spider.x,spider.y,true,nil,false,false)
 		-- if we can't find a point nearby to attach to, create a new one
 		if not start_point or square_dist>=spider.web_attach_dist*spider.web_attach_dist or
 			(spider.is_on_tile and not start_point.has_been_anchored) then
@@ -703,7 +746,7 @@ function update_spider()
 	elseif spider.attached_web_strand and not spider.is_spinning_web and spider.has_pressed_z then
 		local end_point
 		local square_dist
-		end_point,square_dist=calc_closest_web_point(spider.x,spider.y,true,spider.spun_web_start_point.id,false)
+		end_point,square_dist=calc_closest_web_point(spider.x,spider.y,true,spider.spun_web_start_point.id,false,false)
 		-- if we can't find a point nearby to attach to, create a new one
 		if not end_point or square_dist>=spider.web_attach_dist*spider.web_attach_dist or
 			(spider.is_on_tile and not end_point.has_been_anchored) then
@@ -714,6 +757,7 @@ function update_spider()
 		spider.attached_web_strand=nil
 		spider.spun_web_start_point=nil
 		mark_all_points_as_not_being_spun()
+		sfx(4,2)
 	end
 
 	-- press x switch web types when not spinning
@@ -786,6 +830,7 @@ function update_spider()
 		if square_dist<=49 and bug.is_alive and (bug.state=="active" or bug.state=="caught") then
 			create_bug_death_effect(bug)
 			create_floating_text_effect("+"..bug.score.."0",bug.colors[1],bug.x-4,bug.y)
+			sfx(7,1)
 			bug.is_alive=false
 			score+=bug.score
 			bugs_eaten+=1
@@ -855,7 +900,11 @@ function draw_spider()
 	end
 	-- play a walk sound too
 	if (spider.is_on_tile or spider.is_on_web) and (spider.vx!=0 or spider.vy!=0) and spider.frames_since_walk_sound>6 then
-		sfx(0,3)
+		if spider.attached_web_strand then
+			sfx(2,3)
+		else
+			sfx(0,3)
+		end
 		spider.frames_since_walk_sound=0
 	end
 	if (spider.was_on_tile or spider.was_on_web) and not spider.is_on_tile and not spider.is_on_web and spider.hitstun<=0 then
@@ -1047,6 +1096,20 @@ function check_for_web_strand_death(web_strand)
 	return web_strand.is_alive
 end
 
+function create_bug_of_species(species,x,y)
+	if species=="fly" then
+		create_fly(x,y)
+	elseif species=="firefly" then
+		create_firefly(x,y)
+	elseif species=="beetle" then
+		create_beetle(x,y)
+	elseif species=="dragonfly" then
+		create_dragonfly(x,y)
+	elseif species=="hornet" then
+		create_hornet(x,y)
+	end
+end
+
 function create_fly(x,y)
 	create_bug(x,y,"fly",{64},{12,13,5,1},1)
 end
@@ -1080,7 +1143,7 @@ function create_bug(x,y,species,sprites,colors,score)
 		["score"]=score,
 		["is_in_bg"]=true,
 		["strength"]=0,
-		["max_strength"]=1.6,
+		["max_strength"]=1,
 		["caught_web_point"]=nil,
 		["state"]="spawning",
 		["state_frames"]=0
@@ -1093,16 +1156,16 @@ function update_bug(bug)
 	bug.state_frames+=1
 
 	-- transition between states
-	if bug.state=="spawning" and bug.state_frames>15 then
+	if bug.state=="spawning" and bug.state_frames>=15 then
 		bug.state="incoming"
 		bug.state_frames=0
-		bug.vy=0.5
-	elseif bug.state=="incoming" and bug.state_frames>30 then
+		bug.vy=0.2
+	elseif bug.state=="incoming" and bug.state_frames>=30 then
 		bug.state="active"
 		bug.state_frames=0
 		bug.is_in_bg=false
 	elseif bug.state=="active" then
-		if bug.state_frames>30 then
+		if bug.state_frames>=30 then
 			bug.state="escaping"
 			bug.state_frames=0
 		else
@@ -1119,7 +1182,7 @@ function update_bug(bug)
 				bug.vy=0
 			end
 		end
-	elseif bug.state=="escaping" and bug.state_frames>23 then
+	elseif bug.state=="escaping" and bug.state_frames>=18 then
 		bug.is_alive=false
 	end
 
@@ -1195,7 +1258,7 @@ function update_bug(bug)
 
 	-- apply acceleration
 	elseif bug.state!="spawning" then
-		bug.vy-=0.012
+		bug.vy-=0.003
 		if bug.state=="escaping" then
 			bug.vy-=0.05
 		end
@@ -1249,9 +1312,9 @@ function draw_bug(bug)
 		sprites={s+2,s+3}
 	elseif bug.state=="escaping" then
 		sprites={s+2,s+3}
-		if bug.state_frames<10 then
+		if bug.state_frames<8 then
 			set_single_color(c[2])
-		elseif bug.state_frames<20 then
+		elseif bug.state_frames<15 then
 			set_single_color(c[3])
 		else
 			set_single_color(c[4])
@@ -1269,6 +1332,35 @@ function draw_bug(bug)
 	end
 	spr(sprites[flr(bug.state_frames/3)%#sprites+1],bug.x-3,bug.y-4)
 	pal()
+end
+
+function create_bug_spawner(x,y,species,amt,vx,vy)
+	local effect={
+		["x"]=x,
+		["y"]=y,
+		["species"]=species,
+		["amt"]=amt,
+		["vx"]=vx,
+		["vy"]=vy,
+		["frames_alive"]=0,
+		["is_alive"]=true,
+		["update"]=function(effect)
+			if effect.frames_alive%15==0 then
+				create_bug_of_species(effect.species,effect.x,effect.y)
+				effect.amt-=1
+				if effect.amt<=0 then
+					effect.is_alive=false
+				else
+					effect.x+=8*effect.vx
+					effect.y+=8*effect.vy
+				end
+			end
+			effect.frames_alive+=1
+		end,
+		["draw"]=function(effect) end
+	}
+	add(effects,effect)
+	return effect
 end
 
 function create_floating_text_effect(txt,col,x,y)
@@ -1323,6 +1415,32 @@ function create_bug_death_effect(bug)
 	return effect
 end
 
+function create_announcement_effect(txt)
+	local effect={
+		["txt"]=txt,
+		["frames_alive"]=0,
+		["is_alive"]=true,
+		["update"]=function(effect)
+			effect.frames_alive+=1
+			if effect.frames_alive>=75 then
+				effect.is_alive=false
+			end
+		end,
+		["draw"]=function(effect)
+			if effect.frames_alive<65 then
+				color(7)
+			elseif effect.frames_alive<70 then
+				color(13)
+			else
+				color(1)
+			end
+			print(txt,64-2*#txt,2)
+		end
+	}
+	add(effects,effect)
+	return effect
+end
+
 function update_effect(effect)
 	effect.update(effect)
 end
@@ -1350,7 +1468,7 @@ function draw_ui()
 		txt=txt.."0"
 	end
 	txt=txt..seconds
-	if minutes<=0 and (seconds<=1 or (seconds <= 10 and timer%30>15)) then
+	if not is_in_building_phase and minutes<=0 and (seconds<=1 or (seconds <= 10 and timer%30>15)) then
 		color(8)
 	else
 		color(7)
@@ -1500,7 +1618,7 @@ end
 function calc_closest_spot_on_web(x,y,allow_freefalling)
 	local closest_web_point
 	local closest_square_dist
-	closest_web_point,closest_square_dist=calc_closest_web_point(x,y,allow_freefalling,nil,false)
+	closest_web_point,closest_square_dist=calc_closest_web_point(x,y,allow_freefalling,nil,false,false)
 	local closest_x=nil
 	local closest_y=nil
 	if closest_web_point then
@@ -1712,14 +1830,14 @@ __map__
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __sfx__
-0106000021520215151d5201d5152d0002d0002f0002f0002d0002d0052d0002d00500000000002d0002d0002b0002b0052b0002b00500000000002b0002b0002a0002a0002a0002a000300002f0002d0002b000
-01060000215302b5312b5312b5212b5110d5012900026000215002b5012b5012b5012b5012b50128000240002900024000280000000000000000000000000000000000000000000000000000000000000002d000
-010d00001f0001d6002b0002b0002d000280002d0002f000300002f0002d0002b000290002800000000000000000000000000000000000000000000000000000000000000000000000000000000000000002f000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0106000021530215251d5301d5252d0002d0002f0002f0002d0002d0052d0002d00500000000002d0002d0002b0002b0052b0002b00500000000002b0002b0002a0002a0002a0002a000300002f0002d0002b000
+01060000215502b5512b5512b5412b5310d5012900026000215002b5012b5012b5012b5012b50128000240002900024000280000000000000000000000000000000000000000000000000000000000000002d000
+0106000021120211151d1201d1152d000280002d0002f000300002f0002d0002b000290002800000000000000000000000000000000000000000000000000000000000000000000000000000000000000002f000
+010300001c7301c730186043060524600182001830018300184001840018500185001860018600187001870018200182000000000000000000000000000000000000000000000000000000000000000000000000
+010300001873018730000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0106000024540245302b5202b54013630136111360100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+01060000186701865018620247702b7702b7700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+010c0000185551c5551f5501f55000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
