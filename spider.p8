@@ -2,241 +2,432 @@ pico-8 cartridge // http://www.pico-8.com
 version 8
 __lua__
 
--- game vars
-tile_symbols="abcdefghijklmnopqrstuvwxyz0123456789"
-tile_flip_matrix={8,4,2,1,128,64,32,16}
-scene=nil
-scene_frame=0
-bg_color=0
-score=0
-visible_score=0
-timer=0
-level_num=0
-bugs_eaten=0
-visible_bugs_eaten=0
-spider=nil
-is_in_building_phase=false
-bugs={}
-effects={}
-web_points={}
-web_strands={}
-tiles={}
+
+-- old global vars
+local score=0
+local visible_score=0
+local timer=0
+local level_num=0
+local bugs_eaten=0
+local visible_bugs_eaten=0
+local spider=nil
+local is_in_building_phase=false
+local bugs={}
+local effects={}
+
+
+-- global vars
+local scene=nil
+local scene_frame=0
+local entities={}
+local new_entities={}
+local web_points={}
+local web_strands={}
+local tiles={}
+
+
+-- constants
+local render_layers={"background","web","midground","spider","foreground"}
+local tile_symbols="abcdefghijklmnopqrstuvwxyz0123456789"
+local tile_flip_matrix={8,4,2,1,128,64,32,16}
+local scenes={}
+local levels={
+	{
+		["spawn_point"]={63,17},
+		["tileset"]="carrot",
+		["map"]={
+			"m77n        vrqn",
+			" 45      vtr 66n",
+			" 45  qsu   vr67n",
+			" 45qsu      o65n",
+			" opp        m45 ",
+			"i20l         45 ",
+			"e000j        45 ",
+			"e003f        45 ",
+			"g000f        op ",
+			"e020f       k20j",
+			"e000f      i000f",
+			"e003h      e200h",
+			"g200j      g003j",
+			"cyyydaaaaaacyyyd",
+			"wwwwwwwwwwwwwwww"
+		}
+	}
+}
+local tilesets={
+	["carrot"]={128,{240,255, 254,255, 204,204, 204,136, 200,204, 236,255, 204,204, 255,239, 232,254, 255,63, 127,1}}
+}
+local entity_classes={
+	["spider"]={
+		["move_speed"]=1,
+		["gravity"]=0.05,
+		["mass"]=4,
+		["facing_x"]=0,
+		["facing_y"]=1,
+		["is_on_tile"]=false,
+		["is_on_web"]=false,
+		["is_in_freefall"]=false,
+		["is_holding_left"]=false,
+		["is_holding_right"]=false,
+		["is_holding_up"]=false,
+		["is_holding_down"]=false,
+		["is_holding_z"]=false,
+		["has_pressed_z"]=false,
+		["is_spinning_web"]=false,
+		["is_placing_web"]=false,
+		["spun_strand"]=nil,
+		["frames_until_spin_web"]=0,
+		["update"]=function(entity)
+			-- record inputs
+			entity.is_holding_left=btn(0)
+			entity.is_holding_right=btn(1)
+			entity.is_holding_up=btn(2)
+			entity.is_holding_down=btn(3)
+			entity.is_holding_z=btn(4)
+			entity.has_pressed_z=btnp(4)
+			-- figure out if the spider is supported by anything
+			local web_x
+			local web_y
+			local web_square_dist
+			web_x,web_y,web_square_dist=calc_closest_spot_on_web(entity.x,entity.y,false)
+			entity.is_on_web=web_x!=nil and web_y!=nil and web_square_dist<=9
+			entity.is_on_tile=is_solid_tile_at(entity.x,entity.y)
+			entity.is_in_freefall=not entity.is_on_tile and not entity.is_on_web
+			-- when on web, the spider is pulled towards the strands
+			if entity.is_on_web and not entity.is_on_tile then
+				entity.x+=(web_x-entity.x)/5
+				entity.y+=(web_y-entity.y)/5
+			end
+			-- the spider falls if unsupported
+			if entity.is_in_freefall then
+				entity.vy+=entity.gravity
+			-- move the spider
+			else
+				entity.vx=0
+				entity.vy=0
+				if entity.is_holding_left then
+					entity.vx-=entity.move_speed
+				end
+				if entity.is_holding_right then
+					entity.vx+=entity.move_speed
+				end
+				if entity.is_holding_up then
+					entity.vy-=entity.move_speed
+				end
+				if entity.is_holding_down then
+					entity.vy+=entity.move_speed
+				end
+				-- make sure the spider doesn't move faster when moving diagonally
+				if entity.vx!=0 and vy!=0 then
+					entity.vx*=sqrt(0.5)
+					entity.vy*=sqrt(0.5)
+				end
+			end
+			-- apply the spider's velocity
+			entity.x+=entity.vx
+			entity.y+=entity.vy
+			-- keep track of which direction the spider is facing
+			if entity.vx!=0 or entity.vy!=0 then
+				local speed=sqrt(entity.vx*entity.vx+entity.vy*entity.vy)
+				entity.facing_x=entity.vx/speed
+				entity.facing_y=entity.vy/speed
+			end
+			entity.frames_until_spin_web=max(0,entity.frames_until_spin_web-1)
+			-- the spider stops spinning web if it gets cut off at the base
+			if (entity.is_spinning_web or entity.is_placing_web) and not entity.spun_strand.is_alive then
+				entity.is_spinning_web=false
+				entity.is_placing_web=false
+				entity.spun_strand=nil
+				entity.finish_spinning_web(entity)
+			end
+			-- the spider places a spun web when z is pressed
+			if entity.is_placing_web and entity.has_pressed_z then
+				entity.is_placing_web=false
+				entity.spun_strand.set_from(entity.spun_strand,entity.spin_web_point(entity,true))
+				entity.spun_strand=nil
+				entity.finish_spinning_web(entity)
+			-- the spider starts spinning web when z is pressed
+			elseif not entity.is_spinning_web and entity.has_pressed_z then
+				entity.is_spinning_web=true
+				entity.frames_until_spin_web=0
+				entity.spun_strand=create_entity("web_strand",{["from"]=entity,["to"]=entity.spin_web_point(entity,true)})
+			-- the spider stops spinning web when z is no longer held
+			elseif entity.is_spinning_web and not entity.is_holding_z then
+				entity.is_spinning_web=false
+				entity.is_placing_web=true
+			end
+			-- the spider continuously creates web while z is held
+			if entity.is_spinning_web and entity.frames_until_spin_web<=0 then
+				entity.frames_until_spin_web=5
+				local pt=entity.spin_web_point(entity,false)
+				entity.spun_strand.set_from(entity.spun_strand,pt)
+				entity.spun_strand=create_entity("web_strand",{["from"]=entity,["to"]=pt})
+			end
+		end,
+		["draw"]=function(entity)
+			local sprite=29
+			local dx=4
+			local dy=4
+			local flipped_x=false
+			local flipped_y=false
+			if entity.facing_x<-0.4 then
+				flipped_x=true
+				dx=3
+			elseif entity.facing_x<0.4 then
+				sprite=13
+			end
+			if entity.facing_y<-0.4 then
+				flipped_y=true
+				dy=3
+			elseif entity.facing_y<0.4 then
+				sprite=45
+			end
+			-- flip through the walk cycle
+			if not entity.is_in_freefall and (entity.vx!=0 or entity.vy!=0) then
+				if scene_frame%10>=5 then
+					sprite+=2
+				else
+					sprite+=1
+				end
+			end
+			spr(sprite,entity.x+0.5-dx,entity.y+0.5-dy,1,1,flipped_x,flipped_y)
+		end,
+		["spin_web_point"]=function(entity,can_be_fixed)
+			-- search for an existing web point
+			if can_be_fixed then
+				local web_point
+				local square_dist
+				web_point,square_dist=calc_closest_web_point(entity.x,entity.y,true)
+				if web_point and square_dist<81 then
+					return web_point
+				end
+			end
+			-- otherwise just create a new one
+			local is_fixed=can_be_fixed and is_solid_tile_at(entity.x,entity.y)
+			return create_entity("web_point",{
+				["x"]=entity.x,
+				["y"]=entity.y,
+				["vx"]=entity.vx-entity.facing_x,
+				["vy"]=entity.vy-entity.facing_y,
+				["has_been_anchored"]=is_fixed,
+				["is_in_freefall"]=not is_fixed
+			})
+		end,
+		["finish_spinning_web"]=function(entity)
+			foreach(web_points,function(web_point)
+				web_point.is_being_spun=false
+			end)
+		end
+	},
+	["web_point"]={
+		["friction"]=0.1,
+		["gravity"]=0.02,
+		["mass"]=1,
+		["is_being_spun"]=true,
+		["add_to_game"]=function(entity)
+			add(web_points,entity)
+		end,
+		["update"]=function(entity)
+			if entity.is_in_freefall then
+				entity.vy+=entity.gravity
+				entity.vx*=(1-entity.friction)
+				entity.vy*=(1-entity.friction)
+				entity.vx=mid(-3,entity.vx,3)
+				entity.vy=mid(-3,entity.vy,3)
+				entity.x+=entity.vx
+				entity.y+=entity.vy
+			end
+		end
+	},
+	["web_strand"]={
+		["spring_force"]=0.25,
+		["elasticity"]=1.65,
+		["base_length"]=5,
+		["stretched_length"]=5,
+		["break_length"]=25,
+		["percent_elasticity_remaining"]=1,
+		["add_to_game"]=function(entity)
+			add(web_strands,entity)
+		end,
+		["update"]=function(entity)
+			local from=entity.from
+			local to=entity.to
+			-- strands transfer anchored status
+			if from.class_name=="web_point" and to.class_name=="web_point" and not from.is_being_spun and not to.is_being_spun and (from.has_been_anchored or to.has_been_anchored) then
+				from.has_been_anchored=true
+				to.has_been_anchored=true
+			end
+			-- find the current length of the strand
+			local dx=to.x-from.x
+			local dy=to.y-from.y
+			local len=sqrt(dx*dx+dy*dy)
+			-- if the strand stretches too far, it loses elasticity
+			local min_len=entity.base_length*(1+entity.elasticity)
+			local max_len=entity.break_length -- not multiplied by elasticity b/c it is 0 at the break length
+			if len>min_len then
+				local percent_elasticity=mid(0,1-((len-min_len)/(max_len-min_len)),1)
+				if percent_elasticity<=entity.percent_elasticity_remaining then
+					entity.percent_elasticity_remaining=percent_elasticity
+					entity.stretched_length=len/(1+entity.elasticity*percent_elasticity)
+				end
+			end
+			-- bring the two points closer to each other
+			if len>entity.stretched_length and entity.percent_elasticity_remaining>0 then
+				local elastic_dist=len-entity.stretched_length
+				local f=elastic_dist*entity.spring_force
+				local m1=from.mass
+				local m2=to.mass
+				if from.is_in_freefall then
+					from.vx+=f*(m2/m1)*(dx/len)
+					from.vy+=f*(m2/m1)*(dy/len)
+				end
+				if to.is_in_freefall then
+					to.vx-=f*(m1/m2)*(dx/len)
+					to.vy-=f*(m1/m2)*(dy/len)
+				end
+			end
+			if len>=entity.break_length then
+				entity.is_alive=false
+			end
+		end,
+		["draw"]=function(entity)
+			if entity.percent_elasticity_remaining>0.7 then
+				color(7)
+			elseif entity.percent_elasticity_remaining>0.5 then
+				color(15)
+			elseif entity.percent_elasticity_remaining>0.2 then
+				color(9)
+			else
+				color(8)
+			end
+			line(entity.from.x,entity.from.y,entity.to.x,entity.to.y)
+		end,
+		["set_to"]=function(entity,to)
+			entity.to=to
+		end,
+		["set_from"]=function(entity,from)
+			entity.from=from
+		end
+	}
+}
 
 
 -- main functions
 function _init()
-	init_title()
-	-- init_game()
-	-- init_game_over()
+	init_scene("game")
 end
 
 function _update()
-	scene_frame+=1
-	if scene_frame>240*60 then
-		scene_frame=180*60
-	end
-	if scene=="title" then
-		update_title()
-	elseif scene=="game" then
-		update_game()
-		-- update_game()
-	elseif scene=="tutorial" then
-		update_tutorial()
-	elseif scene=="game_over" then
-		update_game_over()
-	end
+	scene_frame=increment_looping_number(scene_frame)
+	scenes[scene][2]()
 end
 
 function _draw()
-	-- clear the canvas
 	camera()
-	rectfill(0,0,127,127,bg_color)
-
-	-- draw the scene
-	if scene=="title" then
-		draw_title()
-	elseif scene=="game" then
-		draw_game()
-	elseif scene=="tutorial" then
-		draw_tutorial()
-	elseif scene=="game_over" then
-		draw_game_over()
-	end
-
-	-- draw guidelines
-	-- camera()
-	-- line(0,0,0,127,8)
-	-- line(62,0,62,127,8)
-	-- line(65,0,65,127,8)
-	-- line(127,0,127,127,8)
-	-- line(0,0,127,0,8)
-	-- line(0,62,127,62,8)
-	-- line(0,65,127,65,8)
-	-- line(0,127,127,127,8)
+	rectfill(0,0,127,127,0)
+	scenes[scene][3]()
 end
 
 
 -- title functions
-function init_title()
-	scene="title"
-	scene_frame=0
-end
-
 function update_title()
-	if (btnp(4) or btnp(5)) and scene_frame>15 then
-		init_tutorial()
+	if btnp(4) and scene_frame>5 then
+		init_scene("game")
 	end
 end
 
 function draw_title()
-	-- local r
-	-- local c
-	-- for c=0,26 do
-	-- 	for r=0,26 do
-	-- 		local x_offset=flr(scene_frame/3)%5-5
-	-- 		rect(5*c+x_offset,5*r,5*c+4+x_offset,5*r+4,1)
-	-- 	end
-	-- end
-	for c=0,5 do
-		for r=0,3 do
-			spr(16*r+c,8*c+40,8*r+32)
-		end
-	end
+	sspr(0,0,48,32,40,32,48,32)
 	line(73,64,73,80,7)
 	spr(13,69,81)
 	if scene_frame%30<20 then
-		print("press z to play demo",24,106,7)
+		print("press z to start",32,106,7)
 	end
-	print("@bridgs_dev",4,122,13)
-	print("www.brid.gs",81,122,13)
-	-- spr(6,1,1)
-	-- line(0,0,0,10,7)
-	-- line(0,0,10,0,7)
 end
 
 
 -- game functions
 function init_game()
-	scene="game"
-	scene_frame=0
-	level_num=1
-	score=0
-	timer=61*30-1
-	is_in_building_phase=true
-	bg_color=levels[level_num].bg_color
-	reset_tiles()
-	load_tiles(levels[level_num].map,tilesets[levels[level_num].tileset])
-	bugs={}
-	effects={}
+	entities={}
+	new_entities={}
 	web_points={}
 	web_strands={}
-	spider=create_spider(levels[level_num].spawn_point[1],levels[level_num].spawn_point[2],true)
+	tiles={}
+	reset_tiles()
+	load_tiles(levels[1].map,levels[1].tileset)
+	create_entity("spider",{
+		["x"]=levels[1].spawn_point[1],
+		["y"]=levels[1].spawn_point[2]
+	})
 end
 
 function update_game()
-	timer-=1
-	if timer<0 then
-		if is_in_building_phase then
-			is_in_building_phase=false
-			timer=61*30-1
-			create_announcement_effect("catch bugs!")
-		else
-			init_game_over()
-			return
-		end
-	end
-
-	if scene_frame==60 and is_in_building_phase then
-		create_announcement_effect("build a web!")
-	end
-
-	local level=levels[level_num]
-	if not is_in_building_phase then
-		foreach(level.bug_spawns,function(spawn)
-			if timer/30==spawn[1]+1 then
-				create_bug_spawner(4+8*(level.center_point[1]+spawn[2]),4+8*(level.center_point[2]+spawn[3]),spawn[4],spawn[5] or 1,spawn[6] or 0,spawn[7] or 0)
+	-- update entities
+	foreach(entities,function(entity)
+		-- call the entity's update function
+		entity.update(entity)
+		-- do some default update stuff
+		entity.frames_alive=increment_looping_number(entity.frames_alive)
+		if entity.frames_to_death>0 then
+			entity.frames_to_death-=1
+			if entity.frames_to_death<=0 then
+				entity.kill(entity)
 			end
-			-- local t=timer/30
-			-- local spawn_type=spawn[4]
-			-- local spawn_time=spawn[1]
-			-- if spawn_type=="single" and spawn_time==t then
+		end
+	end)
 
-			-- if spawn[1]==t then
-			-- 	if spawn[4]=="single" then
-			-- 		create_bug_of_species(spawn[5],8*level.center_point[1]+spawn[2],8*level.center_point[2]+spawn[3])
-			-- 	end
-			-- end
-		end)
-	end
+	-- add new entities to the game
+	add_new_entities_to_game()
 
-	-- if scene_frame%100==0 then
-	-- 	create_fly(50,50)
-	-- 	create_firefly(50,70)
-	-- 	create_dragonfly(70,70)
-	-- 	create_hornet(70,50)
-	-- 	create_beetle(60,40)
-	-- end
-
-	-- update the web
-	foreach(web_strands,update_web_strand)
-	foreach(web_points,update_web_point)
-
-	-- update the bugs
-	foreach(bugs,update_bug)
-
-	-- update the player spider
-	update_spider()
-
-	-- update special effects
-	foreach(effects,update_effect)
-
-	-- get rid of anything that isn't alive anymore
-	web_strands=filter_list(web_strands,check_for_web_strand_death)
-	web_points=filter_list(web_points,check_for_web_point_death)
-	bugs=filter_list(bugs,is_alive)
-	effects=filter_list(effects,is_alive)
+	-- remove dead entities from the game
+	entities=filter_list(entities,is_alive)
+	web_strands=filter_list(web_strands,is_alive)
+	web_points=filter_list(web_points,is_alive)
 end
 
 function draw_game()
-	camera(0,-8)
-
-	-- draw bugs
-	foreach(bugs,function(bug)
-		draw_bug_bg(bug)
-		if bug.is_in_bg then
-			draw_bug(bug)
-		end
-	end)
-
 	-- draw tiles
-	draw_tiles()
-
-	-- draw the web
-	foreach(web_strands,draw_web_strand)
-
-	-- draw bugs
-	foreach(bugs,function(bug)
-		if not bug.is_in_bg then
-			draw_bug(bug)
+	foreach(tiles,function(tile)
+		if tile then
+			spr(tile.sprite,8*tile.col-8,8*tile.row-8,1,1,tile.is_flipped)
+			-- uncomment to see terrain "hitboxes"
+			-- if scene_frame%16<8 then
+			-- 	local x=8*tile.col-8
+			-- 	local y=8*tile.row-8
+			-- 	local x2
+			-- 	for x2=0,3 do
+			-- 		local y2
+			-- 		for y2=0,3 do
+			-- 			local bit=1+x2+4*y2
+			-- 			local should_draw
+			-- 			if bit>8 then
+			-- 				should_draw=band(2^(bit-9),tile.solid_bits[2])>0
+			-- 			else
+			-- 				should_draw=band(2^(bit-1),tile.solid_bits[1])>0
+			-- 			end
+			-- 			if should_draw then
+			-- 				rectfill(x+2*x2,y+2*y2,x+2*x2+1,y+2*y2+1,7)
+			-- 			end
+			-- 		end
+			-- 	end
+			-- end
 		end
 	end)
 
-	-- draw the playable spider
-	draw_spider()
-
-	-- draw special effects
-	foreach(effects,draw_effect)
-
-	-- draw the ui
-	camera()
-	draw_ui()
+	-- draw each render layer
+	foreach(render_layers,function(render_layer)
+		-- draw the entities on this layer
+		foreach(entities,function(entity)
+			if entity.render_layer==render_layer then
+				entity.draw(entity)
+			end
+		end)
+	end)
 end
 
 
 -- tutorial functions
 function init_tutorial()
-	scene="tutorial"
-	scene_frame=0
 	web_points={}
 	web_strands={}
 	spider=create_spider(0,40,false)
@@ -322,12 +513,15 @@ function update_tutorial()
 	web_strands=filter_list(web_strands,check_for_web_strand_death)
 	web_points=filter_list(web_points,check_for_web_point_death)
 
-	if scene_frame>10 then
+	if scene_frame>640 then
 		if btn(4) then
-			init_game()
+			init_scene("game")
 		elseif btn(5) then
-			init_tutorial()
+			init_scene("tutorial")
 		end
+	end
+	if btn(4) and btn(5) then
+		init_scene("game")
 	end
 end
 
@@ -349,7 +543,7 @@ function draw_tutorial()
 		if scene_frame>=640 then
 			color(7)
 		else
-			color(13)
+			color(0)
 		end
 		print("z - continue",10,110)
 		print("x - rewatch",70,110)
@@ -365,8 +559,6 @@ end
 
 -- game over functions
 function init_game_over()
-	scene="game_over"
-	scene_frame=0
 	visible_bugs_eaten=0
 	visible_score=0
 end
@@ -377,7 +569,7 @@ function update_game_over()
 			visible_bugs_eaten=bugs_eaten
 			visible_score=score
 		else
-			init_title()
+			init_scene("title")
 		end
 	end
 
@@ -423,127 +615,85 @@ function draw_game_over()
 	print("www.brid.gs",81,122,13)
 end
 
--- constants
-levels={
-	{
-		["spawn_point"]={63,17},
-		["bg_color"]=0,
-		["tileset"]="carrot",
-		["map"]={
-			"m77n        vrqn",
-			" 45      vtr 66n",
-			" 45  qsu   vr67n",
-			" 45qsu      o65n",
-			" opp        m45 ",
-			"i20l         45 ",
-			"e000j        45 ",
-			"e003f        45 ",
-			"g000f        op ",
-			"e020f       k20j",
-			"e000f      i000f",
-			"e003h      e200h",
-			"g200j      g003j",
-			"cyyydaaaaaacyyyd",
-			"wwwwwwwwwwwwwwww"
-		},
-		["center_point"]={8,7},
-		["bug_spawns"]={
-			{58,   -3,   -2, "fly",       3,    2,    2},
-			{52,   -3,   -3, "fly",       3,    2,    0},
-			{47,   -3,    3, "fly",       3,    2,    0},
-			{42,    1,   -5, "fly",       4,    0,    2},
-			{39,   -2,   -2, "fly",       4,    0,    2},
-			{34,    0,    0, "beetle"                  },
-			{29,   -3,   -3, "fly",       5,    1,    1},
-			{28,   -3,    2, "beetle"                  },
-			{27,    2,   -3, "beetle"                  },
-			{22,   -3,    3, "fly",       2,    1,   -1},
-			{21,   -1,    1, "beetle"                  },
-			{20,    0,    2, "fly",       2,    1,   -1},
-			{19,    2,    0, "beetle"                  },
-			{18,    0,   -1, "fly",       2,    1,   -1},
-			{17,    2,   -3, "beetle"                  },
-			{10, -2.5, -2.5, "firefly",   2,    5,    0},
-			{9,     0,    0, "firefly",   2, -2.5,  2.5},
-			{8,   2.5,  2.5, "firefly"                 }
-		}
+
+-- entity functions
+function create_entity(class_name,args)
+	-- create default entity
+	local entity={
+		["class_name"]=class_name,
+		["render_layer"]="midground",
+		["x"]=0,
+		["y"]=0,
+		["vx"]=0,
+		["vy"]=0,
+		["is_alive"]=0,
+		["frames_alive"]=0,
+		["frames_to_death"]=0,
+		["add_to_game"]=noop,
+		["init"]=noop,
+		["update"]=noop,
+		["draw"]=noop,
+		["on_death"]=noop,
+		["kill"]=function(entity)
+			entity.on_death(entity)
+			entity.is_alive=false
+		end
 	}
-}
+	-- add class properties/methods onto it
+	local k
+	local v
+	for k,v in pairs(entity_classes[class_name]) do
+		entity[k]=v
+	end
+	-- add properties onto it from the arguments
+	for k,v in pairs(args) do
+		entity[k]=v
+	end
+	-- initialize it
+	entity.init(entity,args)
+	-- return it
+	add(new_entities,entity)
+	return entity
+end
 
-tilesets={
-	["carrot"]={128,{240,255, 254,255, 204,204, 204,136, 200,204, 236,255, 204,204, 255,239, 232,254, 255,63, 127,1}}
-}
+function add_new_entities_to_game()
+	foreach(new_entities,function(entity)
+		if entity.add_to_game(entity)!=false then
+			add(entities,entity)
+		end
+	end)
+	new_entities={}
+end
 
-web_types={
-	{
-		["physics"]={
-			["initial_speed"]=1,
-			["initial_tautness"]=0.00,
-			["dist_between_points"]=5,
-			["gravity"]=0.02,
-			["friction"]=0.1,
-			["elasticity"]=1.65,
-			["break_ratio"]=5.00,
-			["detatch_from_tile_ratio"]=10.00, -- won't happen
-			["spring_force"]=0.25,
-			["is_sticky"]=true,
-		},
-		["render"]={
-			["icon_sprite"]=62,
-			["is_dashed"]=false
-		}
-	}
-	-- ,
-	-- {
-	-- 	["physics"]={
-	-- 		["initial_speed"]=1,
-	-- 		["initial_tautness"]=0.00,
-	-- 		["dist_between_points"]=5,
-	-- 		["gravity"]=0.02,
-	-- 		["friction"]=0.05,
-	-- 		["elasticity"]=0.60,
-	-- 		["break_ratio"]=4.00,
-	-- 		["detatch_from_tile_ratio"]=2.00,
-	-- 		["spring_force"]=0.2,
-	-- 		["is_sticky"]=true,
-	-- 	},
-	-- 	["render"]={
-	-- 		["icon_sprite"]=63,
-	-- 		["is_dashed"]=true
-	-- 	}
-	-- }
-}
+function is_alive(entity)
+	return entity.is_alive
+end
 
 
--- all them functions
+-- tile functions
 function reset_tiles()
 	tiles={}
-	local c
-	for c=1,16 do
-		local r
-		tiles[c]={}
-		for r=1,15 do
-			tiles[c][r]=false
-		end
+	local i
+	for i=1,240 do
+		tiles[i]=false
 	end
 end
 
-function load_tiles(map,tileset)
+function load_tiles(map,tileset_name)
 	local c
 	for c=1,16 do
 		local r
 		for r=1,15 do
 			local s=sub(map[r],c,c)
-			if s==" " then
-				tiles[c][r]=false
-			else
-				tiles[c][r]=create_tile(s,tileset,c,r)
+			if s!=" " then
+				tiles[c*15+r-15]=create_tile(s,tilesets[tileset_name],c,r)
 			end
 		end
 	end
 end
 
 function create_tile(symbol,tileset,col,row)
+	-- find index of the symbol
 	local tile_index=1
 	local i
 	for i=1,#tile_symbols do
@@ -553,9 +703,10 @@ function create_tile(symbol,tileset,col,row)
 		end
 	end
 	local is_flipped=(tile_index%2==0)
+	local half_tile_index=ceil(tile_index/2)
 	local solid_bits={255,255}
-	if #tileset[2]>=2*ceil(tile_index/2) then
-		solid_bits={tileset[2][2*ceil(tile_index/2)-1],tileset[2][2*ceil(tile_index/2)]}
+	if #tileset[2]>=2*half_tile_index then
+		solid_bits={tileset[2][2*half_tile_index-1],tileset[2][2*half_tile_index]}
 	end
 	if is_flipped then
 		for i=1,2 do
@@ -570,531 +721,173 @@ function create_tile(symbol,tileset,col,row)
 		end
 	end
 	return {
-		["sprite"]=tileset[1]+ceil(tile_index/2)-1,
+		["sprite"]=tileset[1]+half_tile_index-1,
+		["col"]=col,
+		["row"]=row,
 		["is_flipped"]=is_flipped,
 		["solid_bits"]=solid_bits
 	}
 end
 
-function draw_tiles()
-	local c
-	for c=1,16 do
-		local r
-		for r=1,15 do
-			if tiles[c][r] then
-				draw_tile(tiles[c][r],c,r)
-			end
-		end
+function get_tile_at(x,y)
+	if y>=0 then
+		return tiles[1+flr(x/8)*15+flr(y/8)]
 	end
 end
 
-function draw_tile(tile,col,row)
-	local x=8*col-8
-	local y=8*row-8
-	spr(tile.sprite,x,y,1,1,tile.is_flipped)
-	-- uncomment to see terrain "hitboxes"
-	-- if scene_frame%16<8 then
-	-- 	local x2
-	-- 	for x2=0,3 do
-	-- 		local y2
-	-- 		for y2=0,3 do
-	-- 			local bit=1+x2+4*y2
-	-- 			local should_draw
-	-- 			if bit>8 then
-	-- 				should_draw=band(2^(bit-9),tile.solid_bits[2])>0
-	-- 			else
-	-- 				should_draw=band(2^(bit-1),tile.solid_bits[1])>0
-	-- 			end
-	-- 			if should_draw then
-	-- 				rectfill(x+2*x2,y+2*y2,x+2*x2+1,y+2*y2+1,7)
-	-- 			end
-	-- 		end
-	-- 	end
-	-- end
-end
-
-function create_spider(x,y,is_controllable)
-	return {
-		["x"]=x,
-		["y"]=y,
-		["vx"]=0,
-		["vy"]=0,
-		["facing_x"]=0,
-		["facing_y"]=1,
-		["is_on_tile"]=false,
-		["was_on_tile"]=false,
-		["is_on_web"]=false,
-		["was_on_web"]=false,
-		["is_alive"]=true,
-		["web_type"]=1,
-		["spun_web_start_point"]=nil,
-		["attached_web_strand"]=nil,
-		["frames_to_web_spin"]=0,
-		["hitstun"]=0,
-		["is_spinning_web"]=false,
-		["is_web"]=false,
-		["webbing"]=110,
-		["max_webbing"]=110,
-		["stationary_frames"]=0,
-		["bug_interact_dist"]=12,
-		["nearest_interactive_bug"]=nil,
-		["frames_since_walk_sound"]=99,
-		-- controls
-		["is_controllable"]=is_controllable,
-		["is_holding_left"]=false,
-		["is_holding_right"]=false,
-		["is_holding_up"]=false,
-		["is_holding_down"]=false,
-		["is_holding_z"]=false,
-		["has_pressed_z"]=false,
-		["has_pressed_x"]=false,
-		-- constants
-		["gravity"]=0.05,
-		["web_attract_dist"]=3,
-		["web_attach_dist"]=10,
-		["mass"]=4,
-		["move_speed"]=1,
-		["max_speed"]=2
-	}
-end
-
-function update_spider()
-	if not spider.is_alive then
-		return
-	end
-
-	if spider.is_controllable then
-		spider.is_holding_left=btn(0)
-		spider.is_holding_right=btn(1)
-		spider.is_holding_up=btn(2)
-		spider.is_holding_down=btn(3)
-		spider.is_holding_z=btn(4)
-		spider.has_pressed_z=btnp(4)
-		spider.has_pressed_x=btnp(5)
-	end
-
-	spider.frames_since_walk_sound+=1
-
-	if spider.stationary_frames>0 then
-		spider.stationary_frames-=1
-	end
-
-	spider.was_on_tile = spider.is_on_tile
-	spider.was_on_web = spider.is_on_web
-
-	-- figure out if the spider is walking on a tile
-	if spider.hitstun>0 then
-		spider.is_on_tile=false
-	else
-		spider.is_on_tile=is_solid_tile_at_spider()
-	end
-
-	-- figure out if the spider is walking on web
-	local web_x
-	local web_y
-	local web_square_dist
-	web_x,web_y,web_square_dist=calc_closest_spot_on_web(spider.x,spider.y,false)
-	if spider.hitstun>0 then
-		spider.is_on_web=false
-	else
-		spider.is_on_web=web_x!=nil and web_y!=nil and web_square_dist<=spider.web_attract_dist*spider.web_attract_dist
-	end
-
-	-- spawn web points/strands while z is held
-	if spider.is_spinning_web and spider.webbing>0 then
-		spider.frames_to_web_spin-=1
-		if spider.frames_to_web_spin<=0 then
-			spider.webbing-=1
-			spider.frames_to_web_spin=web_types[spider.web_type].physics.dist_between_points
-			local mid_point=create_web_point_at_spider(false)
-			create_web_strand(spider.attached_web_strand.end_obj,mid_point)
-			spider.attached_web_strand.is_alive=false
-			spider.attached_web_strand=create_web_strand(spider,mid_point)
-			sfx(3,2)
-		end
-	end
-
-	-- if the spider's web gets cut off at the base, it's no longer spinning web
-	if spider.attached_web_strand and not spider.attached_web_strand.is_alive then
-		spider.attached_web_strand=nil
-		spider.spun_web_start_point=nil
-		spider.is_spinning_web=false
-		mark_all_points_as_not_being_spun()
-	end
-
-	-- start spinning web when z is first pressed
-	if not spider.attached_web_strand and spider.has_pressed_z and spider.webbing>0 then
-		spider.webbing-=1
-		spider.is_spinning_web=true
-		spider.frames_to_web_spin=web_types[spider.web_type].physics.dist_between_points/2
-		local start_point
-		local square_dist
-		start_point,square_dist=calc_closest_web_point(spider.x,spider.y,true,nil,false,false)
-		-- if we can't find a point nearby to attach to, create a new one
-		if not start_point or square_dist>=spider.web_attach_dist*spider.web_attach_dist or
-			(spider.is_on_tile and not start_point.has_been_anchored) then
-			start_point=create_web_point_at_spider(is_solid_tile_at_spider())
-		end
-		spider.attached_web_strand=create_web_strand(spider,start_point)
-		spider.spun_web_start_point=start_point
-
-	-- stop spinning web when z is released
-	elseif spider.is_spinning_web and not spider.is_holding_z then
-		spider.is_spinning_web=false
-
-	-- cut/place the end of the strand when z is pressed again
-	elseif spider.attached_web_strand and not spider.is_spinning_web and spider.has_pressed_z then
-		local end_point
-		local square_dist
-		end_point,square_dist=calc_closest_web_point(spider.x,spider.y,true,spider.spun_web_start_point.id,false,false)
-		-- if we can't find a point nearby to attach to, create a new one
-		if not end_point or square_dist>=spider.web_attach_dist*spider.web_attach_dist or
-			(spider.is_on_tile and not end_point.has_been_anchored) then
-			end_point=create_web_point_at_spider(is_solid_tile_at_spider())
-		end
-		create_web_strand(spider.attached_web_strand.end_obj,end_point)
-		spider.attached_web_strand.is_alive=false
-		spider.attached_web_strand=nil
-		spider.spun_web_start_point=nil
-		mark_all_points_as_not_being_spun()
-		sfx(4,2)
-	end
-
-	-- press x switch web types when not spinning
-	if not spider.is_spinning_web and spider.has_pressed_x then
-		spider.web_type=1+(spider.web_type)%#web_types
-	end
-
-	-- move the spider while on tile or web
-	if spider.is_on_tile or spider.is_on_web then
-		-- todo slowly reduce velocity
-		spider.vx=0
-		spider.vy=0
-		if spider.stationary_frames<=0 then
-			-- arrow keys move the spider
-			if spider.is_holding_left then
-				spider.vx-=spider.move_speed
-			end
-			if spider.is_holding_right then
-				spider.vx+=spider.move_speed
-			end
-			if spider.is_holding_up then
-				spider.vy-=spider.move_speed
-			end
-			if spider.is_holding_down then
-				spider.vy+=spider.move_speed
-			end
-			-- make sure you don't move faster when moving diagonally
-			if spider.vx!=0 and vy!=0 then
-				spider.vx*=sqrt(0.5)
-				spider.vy*=sqrt(0.5)
-			end
-		end
-
-		-- when on web, we are pulled towards it
-		if spider.is_on_web and not spider.is_on_tile then
-			local dx=web_x-spider.x
-			local dy=web_y-spider.y
-			spider.x+=dx/(2+spider.web_attract_dist)
-			spider.y+=dy/(2+spider.web_attract_dist)
-		end
-
-	-- otherwise, fall!
-	else
-		spider.vy+=spider.gravity
-	end
-
-	-- limit velocity
-	spider.vx=mid(-spider.max_speed,spider.vx,spider.max_speed)
-	spider.vy=mid(-spider.max_speed,spider.vy,spider.max_speed)
-
-	-- finally, apply that velocity
-	spider.x+=spider.vx
-	spider.y+=spider.vy
-
-	-- keep track of which direction the spider is facing
-	if spider.vx!=0 or spider.vy!=0 then
-		local speed=sqrt(spider.vx*spider.vx+spider.vy*spider.vy)
-		spider.facing_x=spider.vx/speed
-		spider.facing_y=spider.vy/speed
-	end
-
-	-- keep dat spider in bounds so long as she isn't freefalling
-	if spider.is_on_tile then
-		spider.x=mid(0,spider.x,127)
-		spider.y=mid(0,spider.y,119)
-	end
-
-	foreach(bugs,function(bug)
-		local square_dist=calc_square_dist_between_points(spider.x,spider.y,bug.x,bug.y)
-		if square_dist<=49 and bug.is_alive and (bug.state=="active" or bug.state=="caught") then
-			create_bug_death_effect(bug)
-			create_floating_text_effect("+"..bug.score.."0",bug.colors[1],bug.x-4,bug.y)
-			sfx(7,1)
-			bug.is_alive=false
-			score+=bug.score
-			bugs_eaten+=1
-			spider.webbing=min(spider.webbing+2,spider.max_webbing)
-		end
-	end)
-
-	if spider.hitstun>0 then
-		spider.hitstun-=1
-	end
-
-	-- -- if the spider does wind up out of bounds, she's dead :'(
-	-- if spider.x<-8 or spider.x>135 or spider.y<-200 or spider.y>127 then
-	-- 	spider.is_alive=false
-	-- end
-
-	-- actually just keep the spider in bounds
-	if spider.x<3 then
-		spider.x=3
-		spider.vx=max(0,spider.vx)
-	end
-	if spider.x>124 then
-		spider.x=124
-		spider.vx=min(0,spider.vx)
-	end
-	if spider.y<3 then
-		spider.y=3
-		spider.vy=max(0,spider.vy)
-	end
-	if spider.y>116 then
-		spider.y=116
-		spider.vy=min(0,spider.vy)
-	end
-end
-
-function draw_spider()
-	if spider.is_alive then
-		local sprite=29
-		local dx=-4
-		local dy=-4
-		local flipped_x=false
-		local flipped_y=false
-		if spider.hitstun>0 then
-			sprite=61
-		elseif spider.facing_x<-0.4 then
-			flipped_x=true
-			dx=-3
-		elseif spider.facing_x<0.4 then
-			sprite=13
-		end
-		if spider.facing_y<-0.4 then
-			flipped_y=true
-			dy=-3
-		elseif spider.facing_y<0.4 then
-			sprite=45
-		end
-		-- flip through the spider's walk cycle
-		if (spider.is_on_tile or spider.is_on_web) and (spider.vx!=0 or spider.vy!=0) then
-			if scene_frame%10>=5 then
-				sprite+=2
-			else
-				sprite+=1
-			end
-		end
-		-- draw the spider's sprite
-		spr(sprite,spider.x+dx,spider.y+dy,1,1,flipped_x,flipped_y)
-	end
-	-- play a walk sound too
-	if (spider.is_on_tile or spider.is_on_web) and (spider.vx!=0 or spider.vy!=0) and spider.frames_since_walk_sound>6 then
-		if spider.attached_web_strand then
-			sfx(2,3)
+function is_solid_tile_at(x,y)
+	local tile=get_tile_at(x,y)
+	if tile then
+		-- turn the position into a bit 1 to 16
+		local bit=1+flr(x/2)%4+4*(flr(y/2)%4)
+		-- check that against the tile's solid_bits
+		if bit>8 then
+			return band(2^(bit-9),tile.solid_bits[2])>0
 		else
-			sfx(0,3)
-		end
-		spider.frames_since_walk_sound=0
-	end
-	if (spider.was_on_tile or spider.was_on_web) and not spider.is_on_tile and not spider.is_on_web and spider.hitstun<=0 then
-		sfx(1,3)
-	end
-end
-
-next_web_point_id=0
-function create_web_point_at_spider(is_attached_to_tile)
-	local physics=web_types[spider.web_type].physics
-	local web_point={
-		["id"]=next_web_point_id,
-		["x"]=spider.x,
-		["y"]=spider.y,
-		["vx"]=spider.vx-physics.initial_speed*spider.facing_x,
-		["vy"]=-0+spider.vy-physics.initial_speed*spider.facing_y,
-		["is_alive"]=true,
-		["is_attached_to_tile"]=is_attached_to_tile,
-		["is_being_spun"]=true,
-		["has_been_anchored"]=is_attached_to_tile,
-		["caught_bug"]=nil,
-		["num_strands"]=1, -- so it is alive the first frame
-		-- constants
-		["is_web"]=true,
-		["web_type"]=spider.web_type,
-		["mass"]=1,
-		["physics"]=physics,
-		["render"]=web_types[spider.web_type].render
-	}
-	if is_attached_to_tile then
-		web_point.vx=0
-		web_point.vy=0
-	end
-	next_web_point_id+=1
-	add(web_points,web_point)
-	return web_point
-end
-
-function update_web_point(web_point)
-	local physics=web_point.physics
-
-	-- points not attached to any strands are dead
-	if web_point.num_strands<=0 then
-		web_point.is_alive=false
-	end
-	web_point.num_strands=0
-
-	-- add some gravity
-	web_point.vy+=physics.gravity
-
-	if web_point.is_attached_to_tile then
-		web_point.vx=0
-		web_point.vy=0
-	end
-
-	if web_point.caught_bug and not web_point.caught_bug.is_alive then
-		web_point.caught_bug=nil
-	end
-
-	-- apply velocity
-	web_point.x+=web_point.vx
-	web_point.y+=web_point.vy
-
-	-- apply friction
-	web_point.vx*=(1-physics.friction)
-	web_point.vy*=(1-physics.friction)
-end
-
-function check_for_web_point_death(web_point)
-	if web_point.x<-8 or web_point.x>136 or web_point.y<-8 or web_point.y>127 then
-		web_point.is_alive=false
-	end
-	return web_point.is_alive
-end
-
-function create_web_strand(start_obj,end_obj)
-	local physics=web_types[start_obj.web_type].physics
-	local base_length=physics.dist_between_points/(1+physics.initial_tautness*physics.elasticity)
-	local web_strand={
-		["start_obj"]=start_obj,
-		["end_obj"]=end_obj,
-		["is_alive"]=true,
-		["base_length"]=base_length,
-		["stretched_length"]=base_length,
-		["break_length"]=base_length*physics.break_ratio,
-		["detatch_length"]=base_length*physics.detatch_from_tile_ratio,
-		["percent_elasticity_remaining"]=1,
-		-- constants
-		["web_type"]=start_obj.web_type,
-		["physics"]=physics,
-		["render"]=web_types[start_obj.web_type].render
-	}
-	add(web_strands,web_strand)
-	return web_strand
-end
-
-function update_web_strand(web_strand)
-	local start_obj=web_strand.start_obj
-	local end_obj=web_strand.end_obj
-
-	-- keep track of the number of strands attached to each point
-	if start_obj.is_web then
-		start_obj.num_strands+=1
-	end
-	if end_obj.is_web then
-		end_obj.num_strands+=1
-	end
-
-	-- find the current length of the strand
-	local dx=end_obj.x-start_obj.x
-	local dy=end_obj.y-start_obj.y
-	local len=sqrt(dx*dx+dy*dy)
-
-	-- if the strand stretches too far, it loses elasticity
-	local min_len=web_strand.base_length*(1+web_strand.physics.elasticity)
-	local max_len=web_strand.break_length -- not multiplied by elasticity b/c it is 0 at the break length
-	if len>min_len then
-		local percent_elasticity=mid(0,1-((len-min_len)/(max_len-min_len)),1)
-		if percent_elasticity<=web_strand.percent_elasticity_remaining then
-			web_strand.percent_elasticity_remaining=percent_elasticity
-			web_strand.stretched_length=len/(1+web_strand.physics.elasticity*percent_elasticity)
+			return band(2^(bit-1),tile.solid_bits[1])>0
 		end
 	end
-
-	-- bring the two points close to each other
-	if len>web_strand.stretched_length and web_strand.percent_elasticity_remaining>0 then
-		local elastic_dist=len-web_strand.stretched_length
-		local f=elastic_dist*web_strand.physics.spring_force
-		local m1=start_obj.mass
-		local m2=end_obj.mass
-		start_obj.vx+=f*(m2/m1)*(dx/len)
-		start_obj.vy+=f*(m2/m1)*(dy/len)
-		end_obj.vx-=f*(m1/m2)*(dx/len)
-		end_obj.vy-=f*(m1/m2)*(dy/len)
-	end
-
-	-- strands transfer has_been_anchored status
-	if start_obj.is_web and end_obj.is_web then
-		if start_obj.has_been_anchored then
-			end_obj.has_been_anchored = true
-		end
-		if end_obj.has_been_anchored then
-			start_obj.has_been_anchored = true
-		end
-	end
-
-	-- strands may detatch from tile
-	if len>web_strand.detatch_length then
-		if start_obj.is_web then
-			start_obj.is_attached_to_tile=false
-		end
-		if end_obj.is_web then
-			end_obj.is_attached_to_tile=false
-		end
-	end
+	return false
 end
 
-function draw_web_strand(web_strand)
-	if web_strand.percent_elasticity_remaining>0.7 then
-		color(7)
-	elseif web_strand.percent_elasticity_remaining>0.5 then
-		color(15)
-	elseif web_strand.percent_elasticity_remaining>0.2 then
-		color(9)
+
+-- math functions
+function ceil(n)
+	return -flr(-n)
+end
+
+function calc_square_dist(x1,y1,x2,y2)
+	local dx=x2-x1
+	local dy=y2-y1
+	return dx*dx+dy*dy
+end
+
+function calc_closest_point_on_line(x1,y1,x2,y2,cx,cy)
+	local match_x
+	local match_y
+	local dx=x2-x1
+	local dy=y2-y1
+	-- if the line is nearly vertical, it's easy
+	if 0.1>dx and dx>-0.1 then
+		match_x=x1
+		match_y=cy
+	-- if the line is nearly horizontal, it's also easy
+	elseif 0.1>dy and dy>-0.1 then
+		match_x=cx
+		match_y=y1
+	--otherwise we have a bit of math to do...
 	else
-		color(8)
+		-- find equation of the line y=mx+b
+		local m=dy/dx
+		local b=y1-m*x1 -- b=y-mx
+		-- find reverse equation from circle
+		local m2=-dx/dy
+		local b2=cy-m2*cx -- b=y-mx
+		-- figure out where their y-values are the same
+		match_x=(b2-b)/(m-m2) -- mx+b=m2x+b2 --> x=(b2-b)/(m-m2)
+		-- plug that into either formula to get the y-value at that x-value
+		match_y=m*match_x+b -- y=mx+b
 	end
-	local start_obj=web_strand.start_obj
-	local end_obj=web_strand.end_obj
-	if web_strand.render.is_dashed then
-		local dx=end_obj.x-start_obj.x
-		local dy=end_obj.y-start_obj.y
-		local steps=flr(max(abs(dx),abs(dy))+0.9)
-		local i
-		for i=1,steps,2 do
-			pset(start_obj.x+dx*i/steps,start_obj.y+dy*i/steps)
-		end
+	if mid(x1,match_x,x2)==match_x and mid(y1,match_y,y2)==match_y then
+		return match_x,match_y
 	else
-		line(start_obj.x,start_obj.y,end_obj.x,end_obj.y)
+		return nil,nil
 	end
 end
 
-function check_for_web_strand_death(web_strand)
-	if not web_strand.start_obj.is_alive or not web_strand.end_obj.is_alive then
-		web_strand.is_alive=false
-	elseif web_strand.percent_elasticity_remaining<=0 then
-		web_strand.is_alive=false
-	end
-	return web_strand.is_alive
+
+-- helper functions
+function noop() end
+
+function init_scene(s)
+	scene=s
+	scene_frame=0
+	scenes[scene][1]()
 end
+
+function increment_looping_number(n)
+	n+=1
+	if n>32000 then
+		n-=10000
+	end
+	return n
+end
+
+function filter_list(list,func)
+	local l={}
+	local i
+	for i=1,#list do
+		if func(list[i]) then
+			add(l,list[i])
+		end
+	end
+	return l
+end
+
+
+-- all them functions
+-- function create_spider(x,y,is_controllable)
+-- 	return {
+-- 		["hitstun"]=0,
+-- 		["webbing"]=110,
+-- 		["max_webbing"]=110,
+-- 	}
+-- end
+
+-- function update_spider()
+-- 	and spider.webbing>0 then
+-- 		spider.webbing-=1
+
+-- 	-- limit velocity
+-- 	spider.vx=mid(-spider.max_speed,spider.vx,spider.max_speed)
+-- 	spider.vy=mid(-spider.max_speed,spider.vy,spider.max_speed)
+
+-- 	-- keep dat spider in bounds so long as she isn't freefalling
+-- 	if spider.is_on_tile then
+-- 		spider.x=mid(0,spider.x,127)
+-- 		spider.y=mid(0,spider.y,119)
+-- 	end
+
+-- 	foreach(bugs,function(bug)
+-- 		local square_dist=calc_square_dist(spider.x,spider.y,bug.x,bug.y)
+-- 		if square_dist<=49 and bug.is_alive and (bug.state=="active" or bug.state=="caught") then
+-- 			create_bug_death_effect(bug)
+-- 			create_floating_text_effect("+"..bug.score.."0",bug.colors[1],bug.x-4,bug.y)
+-- 			sfx(7,1)
+-- 			bug.is_alive=false
+-- 			score+=bug.score
+-- 			bugs_eaten+=1
+-- 			spider.webbing=min(spider.webbing+2,spider.max_webbing)
+-- 		end
+-- 	end)
+
+-- 	if spider.hitstun>0 then
+-- 		spider.hitstun-=1
+-- 	end
+
+-- 	-- -- if the spider does wind up out of bounds, she's dead :'(
+-- 	-- if spider.x<-8 or spider.x>135 or spider.y<-200 or spider.y>127 then
+-- 	-- 	spider.is_alive=false
+-- 	-- end
+
+-- 	-- actually just keep the spider in bounds
+-- 	if spider.x<3 then
+-- 		spider.x=3
+-- 		spider.vx=max(0,spider.vx)
+-- 	end
+-- 	if spider.x>124 then
+-- 		spider.x=124
+-- 		spider.vx=min(0,spider.vx)
+-- 	end
+-- 	if spider.y<3 then
+-- 		spider.y=3
+-- 		spider.vy=max(0,spider.vy)
+-- 	end
+-- 	if spider.y>116 then
+-- 		spider.y=116
+-- 		spider.vy=min(0,spider.vy)
+-- 	end
+-- end
 
 function create_bug_of_species(species,x,y)
 	if species=="fly" then
@@ -1206,7 +999,7 @@ function update_bug(bug)
 					sfx(9,0)
 					bug.is_alive=false
 					foreach(web_points,function(web_point)
-						local dist=sqrt(calc_square_dist_between_points(bug.x,bug.y,web_point.x,web_point.y))
+						local dist=sqrt(calc_square_dist(bug.x,bug.y,web_point.x,web_point.y))
 						if dist<10 then
 							web_point.is_alive=false
 						elseif dist<30 then
@@ -1217,7 +1010,7 @@ function update_bug(bug)
 							web_point.vy+=y
 						end
 					end)
-					local square_dist=sqrt(calc_square_dist_between_points(bug.x,bug.y,spider.x,spider.y))
+					local square_dist=sqrt(calc_square_dist(bug.x,bug.y,spider.x,spider.y))
 					if square_dist<400 then
 						local x
 						local y
@@ -1519,7 +1312,61 @@ function draw_ui()
 end
 
 
--- helper functions
+-- web functions
+function calc_closest_web_point(x,y,allow_unanchored)
+	local square_dist
+	local closest_web_point=nil
+	local closest_square_dist=nil
+	foreach(web_points,function(web_point)
+		if not web_point.is_being_spun and
+			(allow_unanchored or web_point.has_been_anchored) then
+			square_dist=calc_square_dist(x,y,web_point.x,web_point.y)
+			if closest_square_dist==nil or square_dist<closest_square_dist then
+				closest_web_point=web_point
+				closest_square_dist=square_dist
+			end
+		end
+	end)
+	return closest_web_point,closest_square_dist
+end
+
+function calc_closest_spot_on_web(x,y,allow_unanchored)
+	local closest_web_point
+	local closest_square_dist
+	closest_web_point,closest_square_dist=calc_closest_web_point(x,y,allow_unanchored)
+	local closest_x=nil
+	local closest_y=nil
+	if closest_web_point then
+		closest_x=closest_web_point.x
+		closest_y=closest_web_point.y
+	end
+	foreach(web_strands,function(web_strand)
+		if not web_strand.from.is_being_spun and not web_strand.to.is_being_spun and
+			(allow_unanchored or (web_strand.from.has_been_anchored and web_strand.to.has_been_anchored)) then
+			local x2
+			local y2
+			x2,y2=calc_closest_point_on_line(
+				web_strand.from.x,web_strand.from.y,
+				web_strand.to.x,web_strand.to.y,
+				x,y)
+			if x2!=nil and y2!=nil then
+				local square_dist=calc_square_dist(x,y,x2,y2)
+				if closest_square_dist==nil or square_dist<closest_square_dist then
+					closest_x=x2
+					closest_y=y2
+					closest_square_dist=square_dist
+				end
+			end
+		end
+	end)
+	return closest_x,closest_y,closest_square_dist
+end
+
+
+
+
+
+
 function find_random_blank_spot()
 	local blank_tiles={}
 	local c
@@ -1535,50 +1382,6 @@ function find_random_blank_spot()
 	return 8*random_tile[1]-2-rnd(4),8*random_tile[2]-2-rnd(4)
 end
 
-function mark_all_points_as_not_being_spun()
-	foreach(web_points,function(web_point)
-		web_point.is_being_spun=false
-	end)
-end
-
-function is_solid_tile_at_spider()
-	return is_solid_tile_at(spider.x,spider.y)
-end
-
-function is_solid_tile_at(x,y)
-	if scene=="tutorial" then
-		return true
-	end
-	local c=1+flr(x/8)
-	local r=1+flr(y/8)
-	if tiles[c] and tiles[c][r] then
-		-- turn the position into a bit 1 to 16
-		local bit=1+flr(x/2)%4+4*(flr(y/2)%4)
-		-- check that against the tile's solid_bits
-		if bit>8 then
-			return band(2^(bit-9),tiles[c][r].solid_bits[2])>0
-		else
-			return band(2^(bit-1),tiles[c][r].solid_bits[1])>0
-		end
-	end
-	return false
-end
-
-function filter_list(list,func)
-	local l={}
-	local i
-	for i=1,#list do
-		if func(list[i]) then
-			add(l,list[i])
-		end
-	end
-	return l
-end
-
-function is_alive(x)
-	return x.is_alive
-end
-
 function create_vector(x,y,magnitude)
 	local length=sqrt(x*x+y*y)
 	if length==0 then
@@ -1588,106 +1391,63 @@ function create_vector(x,y,magnitude)
 	end
 end
 
-function calc_square_dist_between_points(x1,y1,x2,y2)
-	local dx=x2-x1
-	local dy=y2-y1
-	return dx*dx+dy*dy
-end
+-- function calc_closest_web_point(x,y,allow_freefalling,exception_web_point_id,sticky_only,empty_only)
+-- 	local i
+-- 	local square_dist
+-- 	local closest_web_point=nil
+-- 	local closest_square_dist=nil
+-- 	for i=1,#web_points do
+-- 		if not web_points[i].is_being_spun and
+-- 			(not exception_web_point_id or web_points[i].id!=exception_web_point_id) and
+-- 			(allow_freefalling or web_points[i].has_been_anchored) and
+-- 			(not empty_only or not web_points[i].caught_bug) and
+-- 			(not sticky_only or web_points[i].physics.is_sticky) then
+-- 			square_dist=calc_square_dist(x,y,web_points[i].x,web_points[i].y)
+-- 			if closest_square_dist==nil or square_dist<closest_square_dist then
+-- 				closest_web_point=web_points[i]
+-- 				closest_square_dist=square_dist
+-- 			end
+-- 		end
+-- 	end
+-- 	return closest_web_point,closest_square_dist
+-- end
 
-function calc_closest_point_on_line(x1,y1,x2,y2,cx,cy)
-	local match_x
-	local match_y
-	local dx=x2-x1
-	local dy=y2-y1
-	-- if the line is nearly vertical, it's easy
-	if 0.1>dx and dx>-0.1 then
-		match_x=x1
-		match_y=cy
-	-- if the line is nearly horizontal, it's also easy
-	elseif 0.1>dy and dy>-0.1 then
-		match_x=cx
-		match_y=y1
-	--otherwise we have a bit of math to do...
-	else
-		-- find equation of the line y=mx+b
-		local m=dy/dx
-		local b=y1-m*x1 -- b=y-mx
-		-- find reverse equation from circle
-		local m2=-dx/dy
-		local b2=cy-m2*cx -- b=y-mx
-		-- figure out where their y-values are the same
-		match_x=(b2-b)/(m-m2) -- mx+b=m2x+b2 --> x=(b2-b)/(m-m2)
-		-- plug that into either formula to get the y-value at that x-value
-		match_y=m*match_x+b -- y=mx+b
-	end
-	if mid(x1,match_x,x2)==match_x and mid(y1,match_y,y2)==match_y then
-		return match_x,match_y
-	else
-		return nil,nil
-	end
-end
-
-function calc_closest_web_point(x,y,allow_freefalling,exception_web_point_id,sticky_only,empty_only)
-	local i
-	local square_dist
-	local closest_web_point=nil
-	local closest_square_dist=nil
-	for i=1,#web_points do
-		if not web_points[i].is_being_spun and
-			(not exception_web_point_id or web_points[i].id!=exception_web_point_id) and
-			(allow_freefalling or web_points[i].has_been_anchored) and
-			(not empty_only or not web_points[i].caught_bug) and
-			(not sticky_only or web_points[i].physics.is_sticky) then
-			square_dist=calc_square_dist_between_points(x,y,web_points[i].x,web_points[i].y)
-			if closest_square_dist==nil or square_dist<closest_square_dist then
-				closest_web_point=web_points[i]
-				closest_square_dist=square_dist
-			end
-		end
-	end
-	return closest_web_point,closest_square_dist
-end
-
-function calc_closest_spot_on_web(x,y,allow_freefalling)
-	local closest_web_point
-	local closest_square_dist
-	closest_web_point,closest_square_dist=calc_closest_web_point(x,y,allow_freefalling,nil,false,false)
-	local closest_x=nil
-	local closest_y=nil
-	if closest_web_point then
-		closest_x=closest_web_point.x
-		closest_y=closest_web_point.y
-	end
-	local i
-	for i=1,#web_strands do
-		if not web_strands[i].start_obj.is_being_spun and
-			not web_strands[i].end_obj.is_being_spun and
-			(allow_freefalling or (web_strands[i].start_obj.has_been_anchored and web_strands[i].end_obj.has_been_anchored)) then
-			local x2
-			local y2
-			x2,y2=calc_closest_point_on_line(
-				web_strands[i].start_obj.x,web_strands[i].start_obj.y,
-				web_strands[i].end_obj.x,web_strands[i].end_obj.y,
-				x,y)
-			if x2!=nil and y2!=nil then
-				local square_dist=calc_square_dist_between_points(x,y,x2,y2)
-				if closest_square_dist==nil or square_dist<closest_square_dist then
-					closest_x=x2
-					closest_y=y2
-					closest_square_dist=square_dist
-				end
-			end
-		end
-	end
-	return closest_x,closest_y,closest_square_dist
-end
+-- function calc_closest_spot_on_web(x,y,allow_freefalling)
+-- 	local closest_web_point
+-- 	local closest_square_dist
+-- 	closest_web_point,closest_square_dist=calc_closest_web_point(x,y,allow_freefalling,nil,false,false)
+-- 	local closest_x=nil
+-- 	local closest_y=nil
+-- 	if closest_web_point then
+-- 		closest_x=closest_web_point.x
+-- 		closest_y=closest_web_point.y
+-- 	end
+-- 	local i
+-- 	for i=1,#web_strands do
+-- 		if not web_strands[i].start_obj.is_being_spun and
+-- 			not web_strands[i].end_obj.is_being_spun and
+-- 			(allow_freefalling or (web_strands[i].start_obj.has_been_anchored and web_strands[i].end_obj.has_been_anchored)) then
+-- 			local x2
+-- 			local y2
+-- 			x2,y2=calc_closest_point_on_line(
+-- 				web_strands[i].start_obj.x,web_strands[i].start_obj.y,
+-- 				web_strands[i].end_obj.x,web_strands[i].end_obj.y,
+-- 				x,y)
+-- 			if x2!=nil and y2!=nil then
+-- 				local square_dist=calc_square_dist(x,y,x2,y2)
+-- 				if closest_square_dist==nil or square_dist<closest_square_dist then
+-- 					closest_x=x2
+-- 					closest_y=y2
+-- 					closest_square_dist=square_dist
+-- 				end
+-- 			end
+-- 		end
+-- 	end
+-- 	return closest_x,closest_y,closest_square_dist
+-- end
 
 function calc_sprite(anim,frame_rate)
 	return anim[1+flr(scene_frame/frame_rate)%#anim]
-end
-
-function ceil(n)
-	return -flr(-n)
 end
 
 function set_single_color(c)
@@ -1696,6 +1456,67 @@ function set_single_color(c)
 		pal(i,c)
 	end
 end
+
+
+-- set up the scenes now that we have the functions
+scenes={
+	["title"]={noop,update_title,draw_title},
+	["game"]={init_game,update_game,draw_game},
+	["tutorial"]={init_tutorial,update_tutorial,draw_tutorial},
+	["game_over"]={init_game_over,update_game_over,draw_game_over}
+}
+
+
+-- old constants
+-- levels={
+-- 	{
+-- 		["spawn_point"]={63,17},
+-- 		["tileset"]="carrot",
+-- 		["map"]={
+-- 			"m77n        vrqn",
+-- 			" 45      vtr 66n",
+-- 			" 45  qsu   vr67n",
+-- 			" 45qsu      o65n",
+-- 			" opp        m45 ",
+-- 			"i20l         45 ",
+-- 			"e000j        45 ",
+-- 			"e003f        45 ",
+-- 			"g000f        op ",
+-- 			"e020f       k20j",
+-- 			"e000f      i000f",
+-- 			"e003h      e200h",
+-- 			"g200j      g003j",
+-- 			"cyyydaaaaaacyyyd",
+-- 			"wwwwwwwwwwwwwwww"
+-- 		},
+-- 		["center_point"]={8,7},
+-- 		["bug_spawns"]={
+-- 			{58,   -3,   -2, "fly",       3,    2,    2},
+-- 			{52,   -3,   -3, "fly",       3,    2,    0},
+-- 			{47,   -3,    3, "fly",       3,    2,    0},
+-- 			{42,    1,   -5, "fly",       4,    0,    2},
+-- 			{39,   -2,   -2, "fly",       4,    0,    2},
+-- 			{34,    0,    0, "beetle"                  },
+-- 			{29,   -3,   -3, "fly",       5,    1,    1},
+-- 			{28,   -3,    2, "beetle"                  },
+-- 			{27,    2,   -3, "beetle"                  },
+-- 			{22,   -3,    3, "fly",       2,    1,   -1},
+-- 			{21,   -1,    1, "beetle"                  },
+-- 			{20,    0,    2, "fly",       2,    1,   -1},
+-- 			{19,    2,    0, "beetle"                  },
+-- 			{18,    0,   -1, "fly",       2,    1,   -1},
+-- 			{17,    2,   -3, "beetle"                  },
+-- 			{10, -2.5, -2.5, "firefly",   2,    5,    0},
+-- 			{9,     0,    0, "firefly",   2, -2.5,  2.5},
+-- 			{8,   2.5,  2.5, "firefly"                 }
+-- 		}
+-- 	}
+-- }
+
+-- tilesets={
+-- 	["carrot"]={128,{240,255, 254,255, 204,204, 204,136, 200,204, 236,255, 204,204, 255,239, 232,254, 255,63, 127,1}}
+-- }
+
 
 __gfx__
 00000000000000000000007000000000000000000000000000000000000000000000000000000000000000000000000000000000000070000000700000007000
