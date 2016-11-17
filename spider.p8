@@ -3,16 +3,8 @@ version 8
 __lua__
 
 
--- sound effects
--- exploding fireflies
--- dialog
--- title -> dialog -> game -> game over
--- bug spawns
-
-
 -- old global vars
 local visible_score=0
-local level_num=0
 local bugs_eaten=0
 local visible_bugs_eaten=0
 local is_in_building_phase=false
@@ -23,8 +15,11 @@ local effects={}
 local actual_frame=0
 local scene=nil
 local scene_frame=0
+local level_num=1
 local score=0
 local timer=0
+local frames_until_spawn_bug=0
+local spawns_until_pause=0
 local spider=nil
 local entities={}
 local new_entities={}
@@ -32,6 +27,7 @@ local bugs={}
 local web_points={}
 local web_strands={}
 local tiles={}
+local spawn_points={}
 
 
 -- constants
@@ -44,7 +40,7 @@ local friends={
 	["tutorial_spider"]={
 		["dialog"]={
 			[1]={{"can i ask you a question?"},{"sure"},{"i'd rather not",3}},
-			[2]={{"do you ever th ~1 about how,/in the end, we're all just  /spiders? it keeps me up at  /night..."},{"all the time"},{"umm... no?"},{"eat him"}},
+			[2]={{"do you ever think about how,/in the end, we're all just  /spiders? it keeps me up at  /night..."},{"all the time"},{"umm... no?"},{"eat him"}},
 			[3]={{"oh..."}},
 			[4]={{"nevermind then",-1}}
 		}
@@ -56,6 +52,27 @@ local friend_states={
 	}
 }
 local levels={
+	{
+		["spawn_point"]={63,17},
+		["tileset"]="carrot",
+		["map"]={
+			"m77n        vrqn",
+			" 45  ... vtr 66n",
+			" 45  qsu   vr67n",
+			" 45qsu  ... o65n",
+			" opp  ..... m45 ",
+			"i20l..++++.. 45 ",
+			"e000j.+**+...45 ",
+			"e003f.+**+...45 ",
+			"g000f.+**+...op ",
+			"e020f.+**+. k20j",
+			"e000f.+**+.i000f",
+			"e003h.++++.e200h",
+			"g200j......g003j",
+			"cyyydaaaaaacyyyd",
+			"wwwwwwwwwwwwwwww"
+		}
+	},
 	{
 		["spawn_point"]={28,116},
 		["tileset"]="twig",
@@ -76,27 +93,6 @@ local levels={
 			"   tack         ",
 			"   t            "
 		}
-	},
-	{
-		["spawn_point"]={63,17},
-		["tileset"]="carrot",
-		["map"]={
-			"m77n        vrqn",
-			" 45      vtr 66n",
-			" 45  qsu   vr67n",
-			" 45qsu      o65n",
-			" opp        m45 ",
-			"i20l         45 ",
-			"e000j        45 ",
-			"e003f        45 ",
-			"g000f        op ",
-			"e020f       k20j",
-			"e000f      i000f",
-			"e003h      e200h",
-			"g200j      g003j",
-			"cyyydaaaaaacyyyd",
-			"wwwwwwwwwwwwwwww"
-		}
 	}
 }
 local tilesets={
@@ -104,31 +100,36 @@ local tilesets={
 	["carrot"]={128,{240,255, 254,255, 204,204, 204,136, 200,204, 236,255, 204,204, 255,239, 232,254, 255,63, 127,1}}
 }
 local bug_species={
-	["fly"]={
+	{
+		["species_name"]="fly",
 		["base_sprite"]=64,
 		["colors"]={12,13,5,1},
 		["points"]=1,
 		["wiggles"]=true
 	},
-	["beetle"]={
+	{
+		["species_name"]="beetle",
 		["base_sprite"]=71,
 		["colors"]={8,13,2,1},
 		["points"]=2,
 		["wiggles"]=false
 	},
-	["firefly"]={
+	{
+		["species_name"]="firefly",
 		["base_sprite"]=80,
 		["colors"]={9,4,2,1},
 		["points"]=2,
 		["wiggles"]=false
 	},
-	["dragonfly"]={
+	{
+		["species_name"]="dragonfly",
 		["base_sprite"]=96,
 		["colors"]={11,3,5,1},
 		["points"]=3,
 		["wiggles"]=true
 	},
-	["hornet"]={
+	{
+		["species_name"]="hornet",
 		["base_sprite"]=112,
 		["colors"]={10,9,5,1},
 		["points"]=3,
@@ -232,7 +233,7 @@ local entity_classes={
 				local web_point=entity.spin_web_point(entity,true,false)
 				entity.spun_strand.set_from(entity.spun_strand,web_point)
 				entity.spun_strand=nil
-				if web_point.is_in_freefall and not web_point.has_been_anchored and speed>entity.move_speed then
+				if web_point.is_in_freefall and not web_point.has_been_anchored and speed>0.8*entity.move_speed then
 					entity.web_uncollision_frames=4
 				end
 				entity.finish_spinning_web(entity)
@@ -440,16 +441,15 @@ local entity_classes={
 			entity.from=from
 		end
 	},
-	["bug_spawn"]={
+	["bug_spawn_flash"]={
 		["render_layer"]="far_background",
 		["frames_to_death"]=15,
-		["init"]=function(entity)
-			entity.color=bug_species[entity.species].colors[1]
-		end,
 		["draw"]=function(entity)
-			colorwash(entity.color)
-			spr(123+flr(entity.frames_alive/3),entity.x-3,entity.y-4)
-			pal()
+			if entity.frames_to_death<=15 then
+				colorwash(bug_species[entity.species].colors[1])
+				spr(128-ceil(entity.frames_to_death/3),entity.x-3,entity.y-4)
+				pal()
+			end
 		end,
 		["on_death"]=function(entity)
 			create_entity("bug",{
@@ -464,7 +464,7 @@ local entity_classes={
 		["is_catchable"]=false,
 		["caught_web_point"]=nil,
 		["frames_until_escape"]=0,
-		["vy"]=0.5,
+		["vy"]=0.35,
 		["add_to_game"]=function(entity)
 			add(bugs,entity)
 		end,
@@ -486,7 +486,7 @@ local entity_classes={
 		["update"]=function(entity)
 			-- bugs move downwards while spawning
 			if entity.frames_alive<45 then
-				entity.vy-=0.01
+				entity.vy*=0.95
 			-- bugs become catchable after spawning
 			elseif entity.frames_alive==45 then
 				entity.render_layer="midground"
@@ -505,7 +505,7 @@ local entity_classes={
 					entity.is_catchable=false
 					entity.caught_web_point=web_point
 					web_point.caught_bug=entity
-					entity.frames_until_escape=flr(120+30*rnd())
+					entity.frames_until_escape=rnd_int(120,150)
 				end
 			end
 			-- bugs escape webs in time or if they break
@@ -561,7 +561,7 @@ local entity_classes={
 			})
 			if entity.caught_web_point then
 				-- beetles chew through web
-				if entity.species=="beetle" then
+				if entity.species_name=="beetle" then
 					entity.caught_web_point.die(entity.caught_web_point)
 				end
 				entity.caught_web_point.caught_bug=nil
@@ -609,24 +609,41 @@ local entity_classes={
 			circ(x,y,entity.starting_radius+entity.expansion_rate*entity.frames_alive)
 		end
 	},
-	["speaker"]={
+	["character_portrait"]={
 		["draw"]=function(entity)
-			sspr(48,0,16,16,entity.x-7,entity.y-7)
-			spr(44,entity.x-10,entity.y-10)
-			spr(44,entity.x+4,entity.y-10,1,1,true)
-			spr(44,entity.x-10,entity.y+4,1,1,false,true)
-			spr(44,entity.x+4,entity.y+4,1,1,true,true)
 			color(7)
-			line(entity.x-4,entity.y-10,entity.x+5,entity.y-10)
-			line(entity.x-4,entity.y+11,entity.x+5,entity.y+11)
-			line(entity.x-10,entity.y-4,entity.x-10,entity.y+5)
-			line(entity.x+11,entity.y-4,entity.x+11,entity.y+5)
+			if entity.is_highlighted then
+				spr(44,entity.x-10,entity.y-10)
+				spr(44,entity.x+4,entity.y-10,1,1,true)
+				spr(44,entity.x-10,entity.y+4,1,1,false,true)
+				spr(44,entity.x+4,entity.y+4,1,1,true,true)
+				line(entity.x-4,entity.y-10,entity.x+5,entity.y-10)
+				line(entity.x-4,entity.y+11,entity.x+5,entity.y+11)
+				line(entity.x-10,entity.y-4,entity.x-10,entity.y+5)
+				line(entity.x+11,entity.y-4,entity.x+11,entity.y+5)
+			else
+				colorwash(13)
+				rect(entity.x-9,entity.y-9,entity.x+10,entity.y+10,1)
+			end
+			sspr(48,0,16,16,entity.x-7,entity.y-7)
+			pal()
+		end,
+		["highlight"]=function(entity)
+			entity.is_highlighted=true
+		end,
+		["unhighlight"]=function(entity)
+			entity.is_highlighted=false
 		end
 	},
 	["dialog_screen"]={
 		["buttons"]={},
 		["button_index"]=0,
 		["init"]=function(entity)
+			entity.speaker=create_entity("character_portrait",{
+				["is_highlighted"]=true,
+				["x"]=63,
+				["y"]=18
+			})
 			entity.load_dialog(entity,entity.friend_state.dialog_index)
 		end,
 		["update"]=function(entity)
@@ -755,13 +772,64 @@ local entity_classes={
 			entity.characters_shown=#entity.text
 			entity.frames_fully_shown=10
 		end
+	},
+	["character_grid"]={
+		["selected_character"]=nil,
+		["row"]=2,
+		["col"]=2,
+		["characters"]={},
+		["init"]=function(entity)
+			local r
+			local c
+			for r=1,3 do
+				entity.characters[r]={}
+				for c=1,3 do
+					entity.characters[r][c]=create_entity("character_portrait",{
+						["is_highlighted"]=false,
+						["x"]=entity.x+30*c-60,
+						["y"]=entity.y+30*r-60
+					})
+				end
+			end
+		end,
+		["update"]=function(entity)
+			-- button presses move you about the grid
+			local button_pressed=false
+			if btnp(0) then
+				entity.col=wrap_number(entity.col-1,1,3)
+				button_pressed=true
+			end
+			if btnp(1) then
+				entity.col=wrap_number(entity.col+1,1,3)
+				button_pressed=true
+			end
+			if btnp(2) then
+				entity.row=wrap_number(entity.row-1,1,3)
+				button_pressed=true
+			end
+			if btnp(3) then
+				entity.row=wrap_number(entity.row+1,1,3)
+				button_pressed=true
+			end
+			if button_pressed then
+				if entity.selected_character then
+					entity.selected_character.unhighlight(entity.selected_character)
+				end
+				entity.selected_character=entity.characters[entity.row][entity.col]
+				entity.selected_character.highlight(entity.selected_character)
+			end
+			-- pressing z selects a character and begins a conversations
+			if entity.selected_character and btnp(4) then
+				init_scene("conversation")
+			end
+		end
 	}
 }
 
 
 -- main functions
 function _init()
-	init_scene("dialog")
+	init_scene("game")
 end
 
 function _update()
@@ -796,9 +864,13 @@ end
 
 
 -- title functions
+function init_title()
+	level_num=1
+end
+
 function update_title()
 	if btnp(4) and scene_frame>5 then
-		init_scene("dialog")
+		init_scene("conversation")
 	end
 end
 
@@ -816,26 +888,59 @@ end
 function init_game()
 	init_simulation()
 	score=0
-	timer=90
+	timer=91 -- 30*3+30
+	frames_until_spawn_bug=0
+	spawns_until_pause=3
 	load_tiles(levels[1].map,levels[1].tileset)
 	spider=create_entity("spider",{
 		["x"]=levels[1].spawn_point[1],
 		["y"]=levels[1].spawn_point[2]
 	})
-	add_new_entities_to_game()
 end
 
 function update_game()
-	if scene_frame%80==3 then
-		create_entity("bug_spawn",{
-			["species"]="beetle",
-			["x"]=50,
-			["y"]=50
-		})
-	end
+	-- count down the timer
 	if scene_frame%30==0 then
 		timer=decrement_counter(timer)
 	end
+
+	-- spawn bugs from 1:30 to 0:00
+	if timer<=90 then
+		local phase=min(flr(4-timer/30),3)
+		local max_bug_type=flr(0.5+(level_num+phase)/1.5)
+
+		-- spawn a new bug every so often
+		frames_until_spawn_bug=decrement_counter(frames_until_spawn_bug)
+		if frames_until_spawn_bug<=0 then
+			local dir_x=rnd_int(-1,1)
+			local dir_y=rnd_int(-1,1)
+			if dir_x==0 and dir_y==0 then
+				dir_x=1
+			end
+			local num_bugs=rnd_int(1,3)
+			local spawn_point=spawn_points[num_bugs][rnd_int(1,#spawn_points[num_bugs])]
+			local i
+			for i=0,num_bugs-1 do
+				create_entity("bug_spawn_flash",{
+					["frames_to_death"]=15+15*i,
+					["species"]=1, -- fly
+					["x"]=8*(spawn_point[1]+i*dir_x)-5,
+					["y"]=8*(spawn_point[2]+i*dir_y)-10
+				})
+			end
+			-- phase 1: 1.0s to 2.5s between spawns
+			-- phase 2: 0.5s to 2.0s between spawns
+			-- phase 3: 0.5s to 1.0s between spawns
+			frames_until_spawn_bug=15*flr(num_bugs+max(1,3-phase)+rnd(min(8-2*phase,4)))
+			-- after every couple of spawns, there is a pause
+			spawns_until_pause=decrement_counter(spawns_until_pause)
+			if spawns_until_pause<=0 then
+				spawns_until_pause=rnd_int(3,3+2*phase)
+				frames_until_spawn_bug+=120
+			end
+		end
+	end
+
 	update_simulation()
 end
 
@@ -878,123 +983,101 @@ function draw_game()
 end
 
 
--- dialog functions
-function init_dialog()
+-- character select functions
+function init_character_select()
 	init_simulation()
-	create_entity("speaker",{
+	create_entity("character_grid",{
 		["x"]=63,
-		["y"]=18
+		["y"]=70
 	})
-	create_entity("dialog_screen",{
-		["friend"]=friends.tutorial_spider,
-		["friend_state"]=friend_states.tutorial_spider
-		-- ["dialog"]=friends.tutorial_spider[friend_states.tutorial_spider.dialog]
-		-- ["text"]="do you ever think about how,/in the end, we're all just  /spiders? it keeps me up at  /night...",
-		-- ["responses"]={
-		-- 	{"all the time"},
-		-- 	{"umm... no?"},
-		-- 	{"eat him"}
-		-- }
-	})
-	-- create_entity("dialog_button",{
-	-- 	["text"]="flee to the mountains",
-	-- 	["y"]=108
-	-- })
-	-- create_entity("dialog_button",{
-	-- 	["text"]="greet",
-	-- 	["y"]=93
-	-- })
-	-- create_entity("dialog_button",{
-	-- 	["text"]="eat",
-	-- 	["is_highlighted"]=true,
-	-- 	["y"]=78
-	-- })
-	-- create_entity("speech_box",{
-	-- 	["text"]="do you ever think about how,/in the end, we're all just  /spiders? it keeps me up at  /night..."
-	-- })
-	add_new_entities_to_game()
 end
 
-function update_dialog()
+function update_character_select()
 	update_simulation()
 end
 
-function draw_dialog()
-	-- draw corners
-	spr(12,1,1)
-	spr(12,119,1,1,1,true)
-	spr(12,1,119,1,1,false,true)
-	spr(12,119,119,1,1,true,true)
-
-	-- draw entities
+function draw_character_select()
+	draw_corners()
+	print("pick someone to talk to",64-23*2,15,7)
 	draw_simulation()
-	-- rect(18+30,18,37+30,37,7)
-	-- sspr(48,0,16,16,20+30,20)
-	-- print("hello i am a spider, how",20,50,7)
-	-- print("would you like to proceed?",20,58,7)
-	-- print("no eating please, that would",20,58+8,7)
-	-- print("be a waste",20,58+16,7)
-	-- camera(0,-8)
-	-- draw_simulation()
 end
 
 
--- game over functions
-function init_game_over()
-	visible_bugs_eaten=0
-	visible_score=0
+-- conversation functions
+function init_conversation()
+	init_simulation()
+	create_entity("dialog_screen",{
+		["friend"]=friends.tutorial_spider,
+		["friend_state"]=friend_states.tutorial_spider
+	})
 end
 
-function update_game_over()
-	if (btnp(4) or btnp(5)) and scene_frame>=20 then
-		if visible_bugs_eaten<bugs_eaten or visible_score<score then
-			visible_bugs_eaten=bugs_eaten
-			visible_score=score
-		else
-			init_scene("title")
-		end
-	end
-
-	if scene_frame>=20 and scene_frame%2==0 then
-		if visible_bugs_eaten<bugs_eaten then
-			visible_bugs_eaten=min(bugs_eaten,visible_bugs_eaten+1)
-		elseif visible_score<score then
-			visible_score=min(score,visible_score+1)
-		end
-	end
+function update_conversation()
+	update_simulation()
 end
 
-function draw_game_over()
-	print("game over",46,14,7)
-	line(46,20,80,20,7)
-	print("bugs eaten",15,45,7)
-	print("final score",15,58,7)
-	if scene_frame>=20 then
-		if visible_score>=score and visible_bugs_eaten<=bugs_eaten then
-			print("thank you for playing!",20,79,7)
-			print("press z to restart",28,89,13)
-			spr(13,60,104)
-			if scene_frame%30<20 then
-				spr(63,67,101)
-				pset(65,109,7)
-			end
-		end
-		-- draw score
-		local bugs_text=""..visible_bugs_eaten
-		print(bugs_text,110-4*#bugs_text,45,7)
+function draw_conversation()
+	draw_corners()
+	draw_simulation()
+end
 
-		if visible_bugs_eaten>=bugs_eaten then
-			local score_text
-			if visible_score<=0 then
-				score_text="0"
-			else
-				score_text=visible_score.."0"
-			end
-			print(score_text,110-4*#score_text,58,7)
-		end
-	end
-	print("@bridgs_dev",4,122,13)
-	print("www.brid.gs",81,122,13)
+
+-- ending functions
+function init_ending()
+	-- visible_bugs_eaten=0
+	-- visible_score=0
+end
+
+function update_ending()
+	-- if (btnp(4) or btnp(5)) and scene_frame>=20 then
+	-- 	if visible_bugs_eaten<bugs_eaten or visible_score<score then
+	-- 		visible_bugs_eaten=bugs_eaten
+	-- 		visible_score=score
+	-- 	else
+	-- 		init_scene("title")
+	-- 	end
+	-- end
+
+	-- if scene_frame>=20 and scene_frame%2==0 then
+	-- 	if visible_bugs_eaten<bugs_eaten then
+	-- 		visible_bugs_eaten=min(bugs_eaten,visible_bugs_eaten+1)
+	-- 	elseif visible_score<score then
+	-- 		visible_score=min(score,visible_score+1)
+	-- 	end
+	-- end
+end
+
+function draw_ending()
+	-- print("game over",46,14,7)
+	-- line(46,20,80,20,7)
+	-- print("bugs eaten",15,45,7)
+	-- print("final score",15,58,7)
+	-- if scene_frame>=20 then
+	-- 	if visible_score>=score and visible_bugs_eaten<=bugs_eaten then
+	-- 		print("thank you for playing!",20,79,7)
+	-- 		print("press z to restart",28,89,13)
+	-- 		spr(13,60,104)
+	-- 		if scene_frame%30<20 then
+	-- 			spr(63,67,101)
+	-- 			pset(65,109,7)
+	-- 		end
+	-- 	end
+	-- 	-- draw score
+	-- 	local bugs_text=""..visible_bugs_eaten
+	-- 	print(bugs_text,110-4*#bugs_text,45,7)
+
+	-- 	if visible_bugs_eaten>=bugs_eaten then
+	-- 		local score_text
+	-- 		if visible_score<=0 then
+	-- 			score_text="0"
+	-- 		else
+	-- 			score_text=visible_score.."0"
+	-- 		end
+	-- 		print(score_text,110-4*#score_text,58,7)
+	-- 	end
+	-- end
+	-- print("@bridgs_dev",4,122,13)
+	-- print("www.brid.gs",81,122,13)
 end
 
 
@@ -1103,8 +1186,10 @@ function create_entity(class_name,args)
 		entity[k]=v
 	end
 	-- add properties onto it from the arguments
-	for k,v in pairs(args) do
-		entity[k]=v
+	if args then
+		for k,v in pairs(args) do
+			entity[k]=v
+		end
 	end
 	-- initialize it
 	entity.init(entity,args)
@@ -1134,31 +1219,44 @@ function reset_tiles()
 	for i=1,240 do
 		tiles[i]=false
 	end
+	spawn_points={{},{},{}}
 end
 
 function load_tiles(map,tileset_name)
+	-- loop through the 2d array of symbols
 	local c
 	for c=1,16 do
 		local r
 		for r=1,15 do
-			local s=sub(map[r],c,c)
-			if s!=" " then
-				tiles[c*15+r-15]=create_tile(s,tilesets[tileset_name],c,r)
+			local symbol=sub(map[r],c,c)
+			-- find the tile index of the symbol
+			local tile_index
+			local i
+			for i=1,#tile_symbols do
+				if symbol==sub(tile_symbols,i,i) then
+					tile_index=i
+					break
+				end
+			end
+			-- create the tile if the symbol exists
+			if tile_index then
+				tiles[c*15+r-15]=create_tile(tilesets[tileset_name],tile_index,c,r)
+			-- otherwise we may need to log it as a spawn point
+			elseif symbol=="." then
+				add(spawn_points[1],{c,r})
+			elseif symbol=="+" then
+				add(spawn_points[1],{c,r})
+				add(spawn_points[2],{c,r})
+			elseif symbol=="*" then
+				add(spawn_points[1],{c,r})
+				add(spawn_points[2],{c,r})
+				add(spawn_points[3],{c,r})
 			end
 		end
 	end
 end
 
-function create_tile(symbol,tileset,col,row)
-	-- find index of the symbol
-	local tile_index=1
-	local i
-	for i=1,#tile_symbols do
-		if symbol==sub(tile_symbols,i,i) then
-			tile_index=i
-			break
-		end
-	end
+function create_tile(tileset,tile_index,col,row)
 	local is_flipped=(tile_index%2==0)
 	local half_tile_index=ceil(tile_index/2)
 	local solid_bits={255,255}
@@ -1209,8 +1307,22 @@ end
 
 
 -- math functions
+function rnd_int(min_val,max_val)
+	return flr(min_val+rnd(1+max_val-min_val))
+end
+
 function ceil(n)
 	return -flr(-n)
+end
+
+function wrap_number(n,min,max)
+	if n<min then
+		return max
+	elseif n>max then
+		return min
+	else
+		return n
+	end
 end
 
 function calc_square_dist(x1,y1,x2,y2)
@@ -1305,6 +1417,15 @@ function calc_closest_spot_on_web(x,y,allow_unanchored)
 end
 
 
+-- draw helper functions
+function draw_corners()
+	spr(12,1,1)
+	spr(12,119,1,1,1,true)
+	spr(12,1,119,1,1,false,true)
+	spr(12,119,119,1,1,true,true)
+end
+
+
 -- helper functions
 function noop() end
 
@@ -1345,207 +1466,24 @@ function filter_list(list,func)
 	return l
 end
 
+function throw_error(err)
+	cls()
+	color(8)
+	print(err)
+	exit()
+	purposeful_error[1]=nil -- nonsense
+end
+
 
 -- set up the scenes now that the functions are defined
 scenes={
-	["title"]={noop,update_title,draw_title},
+	["title"]={init_title,update_title,draw_title},
 	["game"]={init_game,update_game,draw_game},
-	["dialog"]={init_dialog,update_dialog,draw_dialog},
-	["game_over"]={init_game_over,update_game_over,draw_game_over}
+	["character_select"]={init_character_select,update_character_select,draw_character_select},
+	["conversation"]={init_conversation,update_conversation,draw_conversation},
+	["ending"]={init_ending,update_ending,draw_ending}
 }
 
-
--- 	-- limit velocity
--- 	spider.vx=mid(-spider.max_speed,spider.vx,spider.max_speed)
--- 	spider.vy=mid(-spider.max_speed,spider.vy,spider.max_speed)
-
--- 	-- keep dat spider in bounds so long as she isn't freefalling
--- 	if spider.is_on_tile then
--- 		spider.x=mid(0,spider.x,127)
--- 		spider.y=mid(0,spider.y,119)
--- 	end
-
--- 	foreach(bugs,function(bug)
--- 		local square_dist=calc_square_dist(spider.x,spider.y,bug.x,bug.y)
--- 		if square_dist<=49 and bug.is_alive and (bug.state=="active" or bug.state=="caught") then
--- 			create_bug_death_effect(bug)
--- 			create_floating_text_effect("+"..bug.score.."0",bug.colors[1],bug.x-4,bug.y)
--- 			sfx(7,1)
--- 			bug.is_alive=false
--- 			score+=bug.score
--- 			bugs_eaten+=1
--- 			spider.webbing=min(spider.webbing+2,spider.max_webbing)
--- 		end
--- 	end)
-
--- 	if spider.hitstun>0 then
--- 		spider.hitstun-=1
--- 	end
-
--- 	-- -- if the spider does wind up out of bounds, she's dead :'(
--- 	-- if spider.x<-8 or spider.x>135 or spider.y<-200 or spider.y>127 then
--- 	-- 	spider.is_alive=false
--- 	-- end
-
--- 	-- actually just keep the spider in bounds
--- 	if spider.x<3 then
--- 		spider.x=3
--- 		spider.vx=max(0,spider.vx)
--- 	end
--- 	if spider.x>124 then
--- 		spider.x=124
--- 		spider.vx=min(0,spider.vx)
--- 	end
--- 	if spider.y<3 then
--- 		spider.y=3
--- 		spider.vy=max(0,spider.vy)
--- 	end
--- 	if spider.y>116 then
--- 		spider.y=116
--- 		spider.vy=min(0,spider.vy)
--- 	end
--- end
-
--- 	-- bug stays attached to web point
--- 	if bug.caught_web_point then
--- 		if not bug.caught_web_point.is_alive then
--- 			bug.caught_web_point=nil
--- 			bug.state="escaping"
--- 			bug.state_frames=0
--- 		else
--- 			bug.x=bug.caught_web_point.x
--- 			bug.y=bug.caught_web_point.y
--- 			bug.strength=min(bug.strength+0.01,bug.max_strength)
--- 			if bug.species=="beetle" then
--- 				if bug.state_frames>140 then
--- 					bug.caught_web_point.is_alive=false
--- 				end
--- 			elseif bug.species=="firefly" then
--- 				if bug.state_frames>=130 then
--- 					create_explosion_effect(bug.x,bug.y)
--- 					sfx(9,0)
--- 					bug.is_alive=false
--- 					foreach(web_points,function(web_point)
--- 						local dist=sqrt(calc_square_dist(bug.x,bug.y,web_point.x,web_point.y))
--- 						if dist<10 then
--- 							web_point.is_alive=false
--- 						elseif dist<30 then
--- 							local x
--- 							local y
--- 							x,y=create_vector(web_point.x-bug.x,web_point.y-bug.y,(30-dist)/8)
--- 							web_point.vx+=x
--- 							web_point.vy+=y
--- 						end
--- 					end)
--- 					local square_dist=sqrt(calc_square_dist(bug.x,bug.y,spider.x,spider.y))
--- 					if square_dist<400 then
--- 						local x
--- 						local y
--- 						x,y=create_vector(spider.x-bug.x,spider.y-bug.y,6)
--- 						spider.hitstun=15
--- 						spider.vx+=x
--- 						spider.vy+=y
--- 					end
--- 				end
--- 			elseif scene_frame%4==0 and rnd(1)<0.4 then
--- 				local dir=rnd(20)
--- 				if dir>15 then -- extra chance of moving up
--- 					bug.caught_web_point.vy-=bug.strength
--- 				elseif dir>10 then -- extra chance of moving up and to the left
--- 					bug.caught_web_point.vx-=bug.strength*0.7
--- 					bug.caught_web_point.vy-=bug.strength*0.7
--- 				elseif dir>5 then -- extra chance of moving up and to the right
--- 					bug.caught_web_point.vx+=bug.strength*0.7
--- 					bug.caught_web_point.vy-=bug.strength*0.7
--- 				elseif dir>4 then
--- 					bug.caught_web_point.vx-=bug.strength*0.7
--- 					bug.caught_web_point.vy+=bug.strength*0.7
--- 				elseif dir>3 then
--- 					bug.caught_web_point.vx+=bug.strength*0.7
--- 					bug.caught_web_point.vy+=bug.strength*0.7
--- 				elseif dir>2 then
--- 					bug.caught_web_point.vx+=bug.strength
--- 				elseif dir>1 then
--- 					bug.caught_web_point.vx-=bug.strength
--- 				else
--- 					bug.caught_web_point.vy+=bug.strength
--- 				end
--- 				if bug.strength>=bug.max_strength and rnd(1)<0.1 then
--- 					bug.state="escaping"
--- 					bug.state_frames=0
--- 					bug.caught_web_point=nil
--- 				end
--- 			end
--- 		end
-
--- function create_bug_spawner(x,y,species,amt,vx,vy)
--- 	local effect={
--- 		["x"]=x,
--- 		["y"]=y,
--- 		["species"]=species,
--- 		["amt"]=amt,
--- 		["vx"]=vx,
--- 		["vy"]=vy,
--- 		["frames_alive"]=0,
--- 		["is_alive"]=true,
--- 		["update"]=function(effect)
--- 			if effect.frames_alive%15==0 then
--- 				create_bug_of_species(effect.species,effect.x,effect.y)
--- 				sfx(8,0)
--- 				effect.amt-=1
--- 				if effect.amt<=0 then
--- 					effect.is_alive=false
--- 				else
--- 					effect.x+=8*effect.vx
--- 					effect.y+=8*effect.vy
--- 				end
--- 			end
--- 			effect.frames_alive+=1
--- 		end,
--- 		["draw"]=function(effect) end
--- 	}
--- 	add(effects,effect)
--- 	return effect
--- end
-
--- function create_explosion_effect(x,y)
--- 	local effect={
--- 		["x"]=x,
--- 		["y"]=y,
--- 		["frames_alive"]=0,
--- 		["is_alive"]=0,
--- 		["update"]=function(effect)
--- 			effect.frames_alive+=1
--- 			if effect.frames_alive>=12 then
--- 				effect.is_alive=false
--- 			end
--- 		end,
--- 		["draw"]=function(effect)
--- 			local x=effect.x+rnd(2)-1
--- 			local y=effect.y+rnd(2)-1
--- 			if effect.frames_alive<4 then
--- 				circfill(x,y,10,7)
--- 			elseif effect.frames_alive<8 then
--- 				circfill(x,y,15,6)
--- 			elseif effect.frames_alive<10 then
--- 				circfill(x,y,17,5)
--- 			else
--- 				circfill(x,y,18,1)
--- 			end
--- 		end
--- 	}
--- 	add(effects,effect)
--- 	return effect
--- end
-
--- function create_vector(x,y,magnitude)
--- 	local length=sqrt(x*x+y*y)
--- 	if length==0 then
--- 		return 0,0
--- 	else
--- 		return x*magnitude/length,y*magnitude/length
--- 	end
--- end
 
 __gfx__
 00000000000000000000007000000000000000000000000000000000000000000000000000000000000000000000000011011111000070000000700000007000
@@ -1588,21 +1526,21 @@ d7700000007776676005000707007007dddddd000000000008000800080008000800080008000800
 000cc000000cc00000ccc00000ccc00000cdc60000cdc00000ccc600000000000000000050e8e05050e8e0508888880007eeee0000eeee000800080008000800
 00000000000000000d0c0d000d0c0d0000d066000d0660000c00d000000000000000000000808000008080008272820002020200020202000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000878000000000000000000000000000000000000
-00000000000000000000000000000000000000020022000000000000000000080088000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000066020004440000006602000066080004440000006608080008000800080008000800080008000800080008000800
-00000000000000000099900000999000009942400092442200999602008842400082448800888608008080000080800000808000008080000080800000808000
-70aa070000aa000022aaa22022aaa22009aa444009a4420009aaa424088944400894420008899424000800000008000000080000000800000008000000080000
-0a44a0000a44a0007a444a700a444a0009aa424009aaa96009aaa444089942400899986008999444008080000080800000808000008080000080800000808000
-0944900079449700092429006924296009aaa90209aaa96009aaa424088998080889886008899424080008000800080008000800080008000800080008000800
-00000000000000000044400070444070009996020099900000999602008886080088800000888608000000000000000000000000000000000000000000000000
-00000000000000000400040004000400000000000000000000006602000000000000000000006608000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000020022000000000000000000080000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000066020004440000006602000066080800080008000800080008000800080008000800080008000800080008000800
+00000000000000000099900000999000009942400092442200999602008842400080800000808000008080000080800000808000008080000080800000808000
+70aa070000aa000022aaa22022aaa22009aa444009a4420009aaa424088944400008000000080000000800000008000000080000000800000008000000080000
+0a44a0000a44a0007a444a700a444a0009aa424009aaa96009aaa444089942400080800000808000008080000080800000808000008080000080800000808000
+0944900079449700092429006924296009aaa90209aaa96009aaa424088998080800080008000800080008000800080008000800080008000800080008000800
+00000000000000000044400070444070009996020099900000999602008886080000000000000000000000000000000000000000000000000000000000000000
+00000000000000000400040004000400000000000000000000006602000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000033000000330000000000000000000000000000000000000000000000000000000000007700777000000000000000000000000000000000
-0033000000330000003b0000003b0000005bb6000000000005350000000000000007700000777700000076006670066006700700000000000000000008000800
-703b0700003b000070330070003300000035bb0000bb6b006b500000000770000070070007000070067076000000000067000677000000060000000000808000
-073b7000003b0000673b0760003b0000050b36600b336b600bb50000007777000707707007000070067070000000000077000067600005560000000000080000
-00bb000007bb700006bbb60007bbb70000533b000335bb6006303300007777000707707007000070007000000000000000000000560006600000000000808000
-0033000070330700035b5000765b56700333300003305b0006b33300000770000070070007000070000000000000000000000000560000000550055008000800
-0000000000000000003330006033306003bb30000005350000b3b000000000000007700000777700000000000000000000000000000000000550055000000000
+0033000000330000003b0000003b0000005bb6000000000005350000080008000800080008000800000076006670066006700700000000000000000008000800
+703b0700003b000070330070003300000035bb0000bb6b006b500000008080000080800000808000067076000000000067000677000000060000000000808000
+073b7000003b0000673b0760003b0000050b36600b336b600bb50000000800000008000000080000067070000000000077000067600005560000000000080000
+00bb000007bb700006bbb60007bbb70000533b000335bb6006303300008080000080800000808000007000000000000000000000560006600000000000808000
+0033000070330700035b5000765b56700333300003305b0006b33300080008000800080008000800000000000000000000000000560000000550055008000800
+0000000000000000003330006033306003bb30000005350000b3b000000000000000000000000000000000000000000000000000000000000550055000000000
 00000000000000000500050005000500000000000000000000000000000000000000000000000000000000000000000000000000000000005500005500000000
 00000000000000000500050005000500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 005050000050500070aaa07000aaa00000d5a000066a5a0000500d00080008000800080008000800080008000000000000070000000007000000000000000000
