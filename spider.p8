@@ -1,8 +1,6 @@
 pico-8 cartridge // http://www.pico-8.com
 version 8
 __lua__
-
-
 -- old global vars
 local visible_score=0
 local bugs_eaten=0
@@ -32,7 +30,6 @@ local spawn_points={}
 
 -- constants
 local frame_skip=1
-local render_layers={"far_background","background","web","midground","spider","foreground","far_foreground"}
 local tile_symbols="abcdefghijklmnopqrstuvwxyz0123456789"
 local tile_flip_matrix={8,4,2,1,128,64,32,16}
 local scenes={}
@@ -138,12 +135,12 @@ local bug_species={
 }
 local entity_classes={
 	["spider"]={
-		["render_layer"]="spider",
+		["render_layer"]=5,
 		["move_speed"]=1,
 		["gravity"]=0.05,
 		["mass"]=4,
-		["webbing"]=110,
-		["max_webbing"]=110,
+		["webbing"]=90,
+		["max_webbing"]=90,
 		["facing_x"]=0,
 		["facing_y"]=1,
 		["is_on_tile"]=false,
@@ -257,7 +254,7 @@ local entity_classes={
 			end
 			-- the spider eats bugs
 			foreach(bugs,function(bug)
-				if (bug.is_catchable or bug.caught_web_point) and 25>calc_square_dist(entity.x,entity.y,bug.x,bug.y) then
+				if (bug.is_catchable or bug.caught_web_point) and 49>calc_square_dist(entity.x,entity.y,bug.x,bug.y) then
 					create_entity("bug_wings",{
 						["x"]=bug.x,
 						["y"]=bug.y	
@@ -269,6 +266,7 @@ local entity_classes={
 						["y"]=bug.y	
 					})
 					score+=bug.points
+					entity.webbing=min(entity.webbing+2,entity.max_webbing)
 					bug.die(bug)
 				end
 			end)
@@ -363,7 +361,7 @@ local entity_classes={
 		end
 	},
 	["web_strand"]={
-		["render_layer"]="web",
+		["render_layer"]=3,
 		["spring_force"]=0.25,
 		["elasticity"]=1.65,
 		["base_length"]=5,
@@ -442,7 +440,7 @@ local entity_classes={
 		end
 	},
 	["bug_spawn_flash"]={
-		["render_layer"]="far_background",
+		["render_layer"]=1,
 		["frames_to_death"]=15,
 		["draw"]=function(entity)
 			if entity.frames_to_death<=15 then
@@ -460,7 +458,7 @@ local entity_classes={
 		end
 	},
 	["bug"]={
-		["render_layer"]="background",
+		["render_layer"]=2,
 		["is_catchable"]=false,
 		["caught_web_point"]=nil,
 		["frames_until_escape"]=0,
@@ -489,7 +487,7 @@ local entity_classes={
 				entity.vy*=0.95
 			-- bugs become catchable after spawning
 			elseif entity.frames_alive==45 then
-				entity.render_layer="midground"
+				entity.render_layer=4
 				entity.is_catchable=true
 				entity.vy=0
 			-- bugs escape after a pause
@@ -567,7 +565,7 @@ local entity_classes={
 				entity.caught_web_point.caught_bug=nil
 				entity.caught_web_point=nil
 			end
-			entity.render_layer="foreground"
+			entity.render_layer=6
 			entity.is_catchable=false
 			entity.frames_to_death=12
 			entity.vy=-1
@@ -585,7 +583,7 @@ local entity_classes={
 		end
 	},
 	["floating_points"]={
-		["render_layer"]="far_foreground",
+		["render_layer"]=7,
 		["frames_to_death"]=20,
 		["vy"]=-1,
 		["update"]=function(entity)
@@ -597,7 +595,7 @@ local entity_classes={
 		end
 	},
 	["ripple"]={
-		["render_layer"]="far_background",
+		["render_layer"]=1,
 		["draw"]=function(entity)
 			local x=entity.x
 			local y=entity.y
@@ -860,6 +858,12 @@ function _draw()
 	-- line(0,127,127,127)
 	-- draw the scene
 	scenes[scene][3]()
+	-- draw stats
+	camera()
+	color(15)
+	print("entities: "..#entities,2,110)
+	print("memory:   "..flr(stat(0)*(100/1024)).."%",2,116)
+	print("cpu:      "..flr(100*stat(1)).."%",2,122)
 end
 
 
@@ -888,14 +892,42 @@ end
 function init_game()
 	init_simulation()
 	score=0
-	timer=91 -- 30*3+30
+	timer=120
 	frames_until_spawn_bug=0
 	spawns_until_pause=3
-	load_tiles(levels[1].map,levels[1].tileset)
+	load_tiles(levels[level_num].map,levels[level_num].tileset)
 	spider=create_entity("spider",{
-		["x"]=levels[1].spawn_point[1],
-		["y"]=levels[1].spawn_point[2]
+		["x"]=levels[level_num].spawn_point[1],
+		["y"]=levels[level_num].spawn_point[2]
 	})
+
+	-- debug drawing efficiency
+	-- local j
+	-- for j=1,20 do
+	-- 	local i
+	-- 	local web_point=create_entity("web_point",{
+	-- 		["x"]=20,
+	-- 		["y"]=1+4*j,
+	-- 		["vx"]=0,
+	-- 		["vy"]=0,
+	-- 		["has_been_anchored"]=true,
+	-- 		["is_being_spun"]=false,
+	-- 		["is_in_freefall"]=false
+	-- 	})
+	-- 	for i=1,20 do
+	-- 		local web_point_2=create_entity("web_point",{
+	-- 			["x"]=20+4*i,
+	-- 			["y"]=1+4*j,
+	-- 			["vx"]=0,
+	-- 			["vy"]=0,
+	-- 			["has_been_anchored"]=(i==20),
+	-- 			["is_being_spun"]=false,
+	-- 			["is_in_freefall"]=(i<20)
+	-- 		})
+	-- 		create_entity("web_strand",{["from"]=web_point,["to"]=web_point_2})
+	-- 		web_point=web_point_2
+	-- 	end
+	-- end
 end
 
 function update_game()
@@ -904,8 +936,8 @@ function update_game()
 		timer=decrement_counter(timer)
 	end
 
-	-- spawn bugs from 1:30 to 0:00
-	if timer<=90 then
+	-- spawn bugs from 1:30 to 0:03
+	if timer<=90 and timer>3 then
 		local phase=min(flr(4-timer/30),3)
 		local max_bug_type=flr(0.5+(level_num+phase)/1.5)
 
@@ -920,10 +952,26 @@ function update_game()
 			local num_bugs=rnd_int(1,3)
 			local spawn_point=spawn_points[num_bugs][rnd_int(1,#spawn_points[num_bugs])]
 			local i
+			local r=rnd(1)
+			local bug_type
+			if r<0.2 and max_bug_type>=2 then
+				bug_type=2
+			elseif r<0.3 and max_bug_type>=3 then
+				bug_type=3
+			elseif r<0.4 and max_bug_type>=4 then
+				bug_type=4
+			elseif r<0.5 and max_bug_type>=5 then
+				bug_type=5
+			else
+				bug_type=1
+			end
+			if bug_type==max_bug_type then
+				num_bugs=1 -- fine that this is after num_bugs is first used
+			end
 			for i=0,num_bugs-1 do
 				create_entity("bug_spawn_flash",{
 					["frames_to_death"]=15+15*i,
-					["species"]=1, -- fly
+					["species"]=bug_type,
 					["x"]=8*(spawn_point[1]+i*dir_x)-5,
 					["y"]=8*(spawn_point[2]+i*dir_y)-10
 				})
@@ -1108,51 +1156,58 @@ function update_simulation()
 	-- add new entities to the game
 	add_new_entities_to_game()
 	-- remove dead entities from the game
-	entities=filter_list(entities,is_alive)
-	bugs=filter_list(bugs,is_alive)
-	web_strands=filter_list(web_strands,is_alive)
-	web_points=filter_list(web_points,is_alive)
+	filter_entity_list(entities)
+	filter_entity_list(bugs)
+	filter_entity_list(web_strands)
+	filter_entity_list(web_points)
+	-- sort entities for rendering
+	sort_list(entities,function(a,b)
+		return a.render_layer>b.render_layer
+	end)
 end
 
 function draw_simulation()
-	-- draw each render layer
-	foreach(render_layers,function(render_layer)
-		-- draw the entities on this layer
-		foreach(entities,function(entity)
-			if entity.render_layer==render_layer then
-				entity.draw(entity)
-			end
-		end)
-		if render_layer=="background" then
-			-- draw tiles
-			foreach(tiles,function(tile)
-				if tile then
-					spr(tile.sprite,8*tile.col-8,8*tile.row-8,1,1,tile.is_flipped)
-					-- uncomment to see terrain "hitboxes"
-					-- if scene_frame%16<8 then
-					-- 	local x=8*tile.col-8
-					-- 	local y=8*tile.row-8
-					-- 	local x2
-					-- 	for x2=0,3 do
-					-- 		local y2
-					-- 		for y2=0,3 do
-					-- 			local bit=1+x2+4*y2
-					-- 			local should_draw
-					-- 			if bit>8 then
-					-- 				should_draw=band(2^(bit-9),tile.solid_bits[2])>0
-					-- 			else
-					-- 				should_draw=band(2^(bit-1),tile.solid_bits[1])>0
-					-- 			end
-					-- 			if should_draw then
-					-- 				rectfill(x+2*x2,y+2*y2,x+2*x2+1,y+2*y2+1,7)
-					-- 			end
-					-- 		end
-					-- 	end
-					-- end
-				end
-			end)
+	local i
+	local j=#entities+1
+	-- draw background entities
+	for i=1,#entities do
+		if entities[i].render_layer>2 then
+			j=i
+			break
+		end
+		entities[i].draw(entities[i])
+	end
+	-- draw the level
+	foreach(tiles,function(tile)
+		if tile then
+			spr(tile.sprite,8*tile.col-8,8*tile.row-8,1,1,tile.is_flipped)
+			-- uncomment to see terrain "hitboxes"
+			-- if scene_frame%16<8 then
+			-- 	local x=8*tile.col-8
+			-- 	local y=8*tile.row-8
+			-- 	local x2
+			-- 	for x2=0,3 do
+			-- 		local y2
+			-- 		for y2=0,3 do
+			-- 			local bit=1+x2+4*y2
+			-- 			local should_draw
+			-- 			if bit>8 then
+			-- 				should_draw=band(2^(bit-9),tile.solid_bits[2])>0
+			-- 			else
+			-- 				should_draw=band(2^(bit-1),tile.solid_bits[1])>0
+			-- 			end
+			-- 			if should_draw then
+			-- 				rectfill(x+2*x2,y+2*y2,x+2*x2+1,y+2*y2+1,7)
+			-- 			end
+			-- 		end
+			-- 	end
+			-- end
 		end
 	end)
+	-- draw foreground entities
+	for i=j,#entities do
+		entities[i].draw(entities[i])
+	end
 end
 
 
@@ -1161,7 +1216,7 @@ function create_entity(class_name,args)
 	-- create default entity
 	local entity={
 		["class_name"]=class_name,
-		["render_layer"]="midground",
+		["render_layer"]=4,
 		["x"]=0,
 		["y"]=0,
 		["vx"]=0,
@@ -1455,15 +1510,28 @@ function colorwash(c)
 	end
 end
 
-function filter_list(list,func)
-	local l={}
+function sort_list(list,func)
 	local i
 	for i=1,#list do
-		if func(list[i]) then
-			add(l,list[i])
+		local j=i
+		while j>1 and func(list[j-1],list[j]) do
+			list[j],list[j-1]=list[j-1],list[j]
+			j-=1
 		end
 	end
-	return l
+end
+
+function filter_entity_list(list)
+	local i
+	local num_deleted=0
+	for i=1,#list do
+		if not list[i].is_alive then
+			list[i]=nil
+			num_deleted+=1
+		else
+			list[i-num_deleted],list[i]=list[i],nil
+		end
+	end
 end
 
 function throw_error(err)
