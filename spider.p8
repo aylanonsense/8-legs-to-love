@@ -5,24 +5,18 @@ __lua__
 -- music
 -- levels
 -- score screens
--- scene transitions
 -- ending screen
-
-
--- old global vars
-local visible_score=0
-local bugs_eaten=0
-local visible_bugs_eaten=0
-local is_in_building_phase=false
-local effects={}
 
 
 -- global vars
 local actual_frame=0
 local scene=nil
+local next_scene=nil
+local transition_frames_left=0
 local scene_frame=0
 local level_num=1
 local score=0
+local bugs_eaten=0
 local timer=0
 local frames_until_spawn_bug=0
 local spawns_until_pause=0
@@ -574,6 +568,7 @@ local entity_classes={
 						["y"]=entity.y	
 					})
 					score+=entity.points
+					bugs_eaten+=1
 					spider.webbing=min(spider.webbing+2,spider.max_webbing)
 					entity.die(entity)
 				end
@@ -954,6 +949,13 @@ function _init()
 end
 
 function _update()
+	if transition_frames_left>0 then
+		transition_frames_left=decrement_counter(transition_frames_left)
+		if transition_frames_left==30 then
+			init_scene(next_scene)
+			next_scene=nil
+		end
+	end
 	actual_frame=increment_looping_counter(actual_frame)
 	if actual_frame%frame_skip>0 then
 		return
@@ -981,12 +983,33 @@ function _draw()
 	-- line(0,127,127,127)
 	-- draw the scene
 	scenes[scene][3]()
-	-- draw stats
+	-- draw the scene transition
 	camera()
-	color(15)
-	print("entities: "..#entities,2,110)
-	print("memory:   "..flr(stat(0)*(100/1024)).."%",2,116)
-	print("cpu:      "..flr(100*stat(1)).."%",2,122)
+	if transition_frames_left>0 then
+		local t=transition_frames_left
+		if t<30 then
+			t+=30
+		end
+		local y
+		for y=0,128,6 do
+			local x
+			for x=0,128,6 do
+				local size=mid(0,50-t+y/10-x/40,4)
+				if transition_frames_left<30 then
+					size=4-size
+				end
+				if size>0 then
+					circfill(x,y,size,0)
+				end
+			end
+		end
+	end
+	-- draw debug stats
+	-- camera()
+	-- color(15)
+	-- print("entities: "..#entities,2,110)
+	-- print("memory:   "..flr(stat(0)*(100/1024)).."%",2,116)
+	-- print("cpu:      "..flr(100*stat(1)).."%",2,122)
 end
 
 
@@ -997,7 +1020,7 @@ end
 
 function update_title()
 	if btnp(4) and scene_frame>5 then
-		init_scene("conversation")
+		transition_to_scene("conversation")
 	end
 end
 
@@ -1015,6 +1038,7 @@ end
 function init_game()
 	init_simulation()
 	score=0
+	bugs_eaten=0
 	timer=120
 	frames_until_spawn_bug=0
 	spawns_until_pause=3
@@ -1629,6 +1653,11 @@ function init_scene(s)
 	scene=s
 	scene_frame=0
 	scenes[scene][1]()
+end
+
+function transition_to_scene(s)
+	next_scene=s
+	transition_frames_left=60
 end
 
 function increment_looping_counter(n)
