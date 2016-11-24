@@ -1,6 +1,14 @@
 pico-8 cartridge // http://www.pico-8.com
 version 8
 __lua__
+-- sound effects
+-- music
+-- levels
+-- score screens
+-- scene transitions
+-- ending screen
+
+
 -- old global vars
 local visible_score=0
 local bugs_eaten=0
@@ -21,7 +29,6 @@ local spawns_until_pause=0
 local spider=nil
 local entities={}
 local new_entities={}
-local bugs={}
 local web_points={}
 local web_strands={}
 local tiles={}
@@ -135,7 +142,7 @@ local bug_species={
 }
 local entity_classes={
 	["spider"]={
-		["render_layer"]=5,
+		["render_layer"]=6,
 		["move_speed"]=1,
 		["gravity"]=0.05,
 		["mass"]=4,
@@ -157,6 +164,7 @@ local entity_classes={
 		["spun_strand"]=nil,
 		["frames_until_spin_web"]=0,
 		["web_uncollision_frames"]=0,
+		["hitstun_frames"]=0,
 		["update"]=function(entity)
 			-- record inputs
 			entity.is_holding_left=btn(0)
@@ -167,12 +175,13 @@ local entity_classes={
 			entity.has_pressed_z=btnp(4)
 			-- figure out if the spider is supported by anything
 			entity.web_uncollision_frames=decrement_counter(entity.web_uncollision_frames)
+			entity.hitstun_frames=decrement_counter(entity.hitstun_frames)
 			local web_x
 			local web_y
 			local web_square_dist
 			web_x,web_y,web_square_dist=calc_closest_spot_on_web(entity.x,entity.y,false)
-			entity.is_on_web=web_x!=nil and web_y!=nil and web_square_dist<=9 and entity.web_uncollision_frames<=0
-			entity.is_on_tile=is_solid_tile_at(entity.x,entity.y)
+			entity.is_on_web=web_x!=nil and web_y!=nil and web_square_dist<=9 and entity.web_uncollision_frames<=0 and entity.hitstun_frames<=0
+			entity.is_on_tile=is_solid_tile_at(entity.x,entity.y) and entity.hitstun_frames<=0
 			entity.is_in_freefall=not entity.is_on_tile and not entity.is_on_web
 			-- when on web, the spider is pulled towards the strands
 			if entity.is_on_web and not entity.is_on_tile then
@@ -252,24 +261,6 @@ local entity_classes={
 				entity.spun_strand=create_entity("web_strand",{["from"]=entity,["to"]=web_point})
 				entity.webbing=decrement_counter(entity.webbing)
 			end
-			-- the spider eats bugs
-			foreach(bugs,function(bug)
-				if (bug.is_catchable or bug.caught_web_point) and 49>calc_square_dist(entity.x,entity.y,bug.x,bug.y) then
-					create_entity("bug_wings",{
-						["x"]=bug.x,
-						["y"]=bug.y	
-					})
-					create_entity("floating_points",{
-						["text"]="+"..bug.points.."0",
-						["colors"]=bug.colors,
-						["x"]=bug.x,
-						["y"]=bug.y	
-					})
-					score+=bug.points
-					entity.webbing=min(entity.webbing+2,entity.max_webbing)
-					bug.die(bug)
-				end
-			end)
 			-- the spider stays in bounds
 			spider.x=mid(3,spider.x,124)
 			spider.y=mid(-1,spider.y,116)
@@ -300,7 +291,9 @@ local entity_classes={
 					sprite+=1
 				end
 			end
-			spr(sprite,entity.x+0.5-dx,entity.y+0.5-dy,1,1,flipped_x,flipped_y)
+			if spider.hitstun_frames%4<2 then
+				spr(sprite,entity.x+0.5-dx,entity.y+0.5-dy,1,1,flipped_x,flipped_y)
+			end
 		end,
 		["spin_web_point"]=function(entity,can_be_fixed,is_being_spun)
 			-- search for an existing web point
@@ -463,9 +456,6 @@ local entity_classes={
 		["caught_web_point"]=nil,
 		["frames_until_escape"]=0,
 		["vy"]=0.35,
-		["add_to_game"]=function(entity)
-			add(bugs,entity)
-		end,
 		["init"]=function(entity)
 			local k
 			local v
@@ -504,13 +494,52 @@ local entity_classes={
 					entity.caught_web_point=web_point
 					web_point.caught_bug=entity
 					entity.frames_until_escape=rnd_int(120,150)
+					if entity.species_name=="firefly" then
+						entity.frames_until_escape=140
+					elseif entity.species_name=="dragonfly" then
+						entity.frames_until_escape*=2
+					end
 				end
 			end
 			-- bugs escape webs in time or if they break
-			if entity.frames_until_escape>0 then
+			if entity.frames_until_escape>0 and entity.caught_web_point then
 				entity.frames_until_escape=decrement_counter(entity.frames_until_escape)
 				if entity.frames_until_escape<=0 then
-					entity.escape(entity)
+					-- fireflies explode, actually
+					if entity.species_name=="firefly" then
+						create_entity("firefly_explosion",{
+							["x"]=entity.x,
+							["y"]=entity.y	
+						})
+						local x
+						local y
+						foreach(web_points,function(web_point)
+							local dist=sqrt(calc_square_dist(entity.x,entity.y,web_point.x,web_point.y))
+							if dist<10 then
+								web_point.die(web_point)
+							elseif dist<30 then
+								x,y=create_vector(web_point.x-entity.x,web_point.y-entity.y,(30-dist)/8)
+								web_point.vx+=x
+								web_point.vy+=y
+							end
+						end)
+						if spider and spider.is_alive then
+							if calc_square_dist(entity.x,entity.y,spider.x,spider.y)<625 then
+								x,y=create_vector(spider.x-entity.x,spider.y-entity.y,1.5)
+								spider.hitstun_frames=25
+								spider.vx=x
+								spider.vy=y
+							end
+						end
+						entity.die(entity)
+					else
+						entity.escape(entity)
+					end
+				-- dragonflies shoot projectiles
+				elseif entity.frames_until_escape%80==0 and entity.species_name=="dragonfly" then
+					create_entity("dragonfly_fireball_spawn",{
+						["bug"]=entity
+					})
 				end
 			end
 			if entity.caught_web_point and not entity.caught_web_point.is_alive then
@@ -529,11 +558,47 @@ local entity_classes={
 				entity.x+=entity.vx
 				entity.y+=entity.vy
 			end
+			-- bugs can be eaten by the spider
+			if spider and spider.is_alive and 49>calc_square_dist(spider.x,spider.y,entity.x,entity.y) then
+				if entity.species_name=="hornet" and entity.is_catchable then
+					if spider.hitstun_frames<=0 then
+						spider.hitstun_frames=25
+						spider.vy=-1.5
+						spider.vx*=0.5
+					end
+				elseif entity.is_catchable or entity.caught_web_point then
+					create_entity("floating_points",{
+						["text"]="+"..entity.points.."0",
+						["colors"]=entity.colors,
+						["x"]=entity.x,
+						["y"]=entity.y	
+					})
+					score+=entity.points
+					spider.webbing=min(spider.webbing+2,spider.max_webbing)
+					entity.die(entity)
+				end
+			end
 		end,
 		["draw"]=function(entity)
+			-- draw tri rings
+			if entity.species_name=="hornet" and entity.is_catchable and not entity.caught_web_point then
+				local i
+				local f=entity.frames_alive/50
+				for i=1,5 do
+					local c=cos(f+0.33*i)
+					local s=sin(f+0.33*i)
+					local c2=cos(f+0.33*(i+1))
+					local s2=sin(f+0.33*(i+1))
+					line(entity.x+7*c,entity.y+7*s,entity.x+7*c2,entity.y+7*s2,8)
+				end
+			end
+			-- draw the actual bug
 			local sprite=entity.base_sprite
 			if entity.caught_web_point then
 				sprite+=4+flr(entity.frames_alive/5)%3
+				if entity.species_name=="firefly" and entity.frames_until_escape<105 and entity.frames_until_escape%35>25 then
+					colorwash(8)
+				end
 			else
 				if entity.frames_alive%6<3 then
 					sprite+=1
@@ -548,15 +613,12 @@ local entity_classes={
 			end
 			spr(sprite,entity.x-3,entity.y-4)
 			pal()
+			-- draw countdown
+			if entity.species_name=="firefly" and entity.caught_web_point and entity.frames_until_escape<=105 then
+				print(ceil(entity.frames_until_escape/35),entity.x,entity.y-10,8)
+			end
 		end,
 		["escape"]=function(entity)
-			create_entity("ripple",{
-				["target"]=entity,
-				["frames_to_death"]=8,
-				["starting_radius"]=2,
-				["expansion_rate"]=1,
-				["colors"]=entity.colors
-			})
 			if entity.caught_web_point then
 				-- beetles chew through web
 				if entity.species_name=="beetle" then
@@ -565,7 +627,7 @@ local entity_classes={
 				entity.caught_web_point.caught_bug=nil
 				entity.caught_web_point=nil
 			end
-			entity.render_layer=6
+			entity.render_layer=7
 			entity.is_catchable=false
 			entity.frames_to_death=12
 			entity.vy=-1
@@ -576,14 +638,75 @@ local entity_classes={
 			end
 		end
 	},
-	["bug_wings"]={
-		["frames_to_death"]=20,
+	["dragonfly_fireball_spawn"]={
+		["render_layer"]=3,
+		["frames_to_death"]=30,
 		["draw"]=function(entity)
-			spr(106+flr(5*entity.frames_alive/20),entity.x-3,entity.y-4)
+			local bug=entity.bug
+			local f=entity.frames_alive
+			local s=sin(f/100)
+			local c=cos(f/100)
+			local d=10-f/3
+			local r=f/20
+			color(8)
+			circfill(bug.x+d*s,bug.y+d*c,r)
+			circfill(bug.x-d*s,bug.y-d*c,r)
+			circfill(bug.x-d*c,bug.y+d*s,r)
+			circfill(bug.x+d*c,bug.y-d*s,r)
+		end,
+		["on_death"]=function(entity)
+			if entity.bug.is_alive and entity.bug.caught_web_point and spider and spider.is_alive then
+				local dx=spider.x-entity.bug.x
+				local dy=spider.y-entity.bug.y
+				local dist=max(1,sqrt(dx*dx+dy*dy))
+				create_entity("dragonfly_fireball",{
+					["x"]=entity.bug.x,
+					["y"]=entity.bug.y,
+					["vx"]=dx/dist,
+					["vy"]=dy/dist
+				})
+			end
+		end
+	},
+	["dragonfly_fireball"]={
+		["frames_to_death"]=150,
+		["render_layer"]=5,
+		["update"]=function(entity)
+			entity.x+=entity.vx
+			entity.y+=entity.vy
+			if spider and spider.is_alive and spider.hitstun_frames<=0 and 9>calc_square_dist(entity.x,entity.y,spider.x,spider.y) then
+				spider.hitstun_frames=25
+				spider.vx*=0.5
+				spider.vy=-1.5
+				entity.die(entity)
+			end
+		end,
+		["draw"]=function(entity)
+			circfill(entity.x,entity.y,1,8)
+		end
+	},
+	["firefly_explosion"]={
+		["frames_to_death"]=18,
+		["render_layer"]=2,
+		["draw"]=function(entity)
+			local f=flr(entity.frames_alive)
+			local x=entity.x+rnd(2)-1
+			local y=entity.y+rnd(2)-1
+			local r=9+1.8*f-f*f/20
+			if f>=12 then
+				color(1)
+			else
+				color(7-flr(f/4))
+			end
+			if f<16 then
+				circfill(x,y,r)
+			else
+				circ(x,y,r)
+			end
 		end
 	},
 	["floating_points"]={
-		["render_layer"]=7,
+		["render_layer"]=8,
 		["frames_to_death"]=20,
 		["vy"]=-1,
 		["update"]=function(entity)
@@ -965,7 +1088,7 @@ function update_game()
 			else
 				bug_type=1
 			end
-			if bug_type==max_bug_type then
+			if bug_type>=max_bug_type then
 				num_bugs=1 -- fine that this is after num_bugs is first used
 			end
 			for i=0,num_bugs-1 do
@@ -1133,7 +1256,6 @@ end
 function init_simulation()
 	entities={}
 	new_entities={}
-	bugs={}
 	web_points={}
 	web_strands={}
 	reset_tiles()
@@ -1157,7 +1279,6 @@ function update_simulation()
 	add_new_entities_to_game()
 	-- remove dead entities from the game
 	filter_entity_list(entities)
-	filter_entity_list(bugs)
 	filter_entity_list(web_strands)
 	filter_entity_list(web_points)
 	-- sort entities for rendering
@@ -1167,6 +1288,16 @@ function update_simulation()
 end
 
 function draw_simulation()
+	-- render layers:
+	--  1=bg effects
+	--  2=background
+	--  tiles
+	--  3=web
+	--  4=midground
+	--  5=projectiles
+	--  6=spider
+	--  7=foreground
+	--  8=ui effects
 	local i
 	local j=#entities+1
 	-- draw background entities
@@ -1377,6 +1508,15 @@ function wrap_number(n,min,max)
 		return min
 	else
 		return n
+	end
+end
+
+function create_vector(x,y,magnitude)
+	local length=sqrt(x*x+y*y)
+	if length==0 then
+		return 0,0
+	else
+		return x*magnitude/length,y*magnitude/length
 	end
 end
 
@@ -1602,14 +1742,14 @@ d7700000007776676005000707007007dddddd000000000008000800080008000800080008000800
 0944900079449700092429006924296009aaa90209aaa96009aaa424088998080800080008000800080008000800080008000800080008000800080008000800
 00000000000000000044400070444070009996020099900000999602008886080000000000000000000000000000000000000000000000000000000000000000
 00000000000000000400040004000400000000000000000000006602000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000033000000330000000000000000000000000000000000000000000000000000000000007700777000000000000000000000000000000000
-0033000000330000003b0000003b0000005bb6000000000005350000080008000800080008000800000076006670066006700700000000000000000008000800
-703b0700003b000070330070003300000035bb0000bb6b006b500000008080000080800000808000067076000000000067000677000000060000000000808000
-073b7000003b0000673b0760003b0000050b36600b336b600bb50000000800000008000000080000067070000000000077000067600005560000000000080000
-00bb000007bb700006bbb60007bbb70000533b000335bb6006303300008080000080800000808000007000000000000000000000560006600000000000808000
-0033000070330700035b5000765b56700333300003305b0006b33300080008000800080008000800000000000000000000000000560000000550055008000800
-0000000000000000003330006033306003bb30000005350000b3b000000000000000000000000000000000000000000000000000000000000550055000000000
-00000000000000000500050005000500000000000000000000000000000000000000000000000000000000000000000000000000000000005500005500000000
+00000000000000000033000000330000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0033000000330000003b0000003b0000005bb6000000000005350000080008000800080008000800080008000800080008000800080008000800080008000800
+703b0700003b000070330070003300000035bb0000bb6b006b500000008080000080800000808000008080000080800000808000008080000080800000808000
+073b7000003b0000673b0760003b0000050b36600b336b600bb50000000800000008000000080000000800000008000000080000000800000008000000080000
+00bb000007bb700006bbb60007bbb70000533b000335bb6006303300008080000080800000808000008080000080800000808000008080000080800000808000
+0033000070330700035b5000765b56700333300003305b0006b33300080008000800080008000800080008000800080008000800080008000800080008000800
+0000000000000000003330006033306003bb30000005350000b3b000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000500050005000500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000500050005000500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 005050000050500070aaa07000aaa00000d5a000066a5a0000500d00080008000800080008000800080008000000000000070000000007000000000000000000
 075a5700005a5000675a5760005a5000005aaa00566a5aa05aa50550008080000080800000808000008080000700000000070000700770000000000000000000
