@@ -5,31 +5,30 @@ __lua__
 -- music
 -- levels
 -- final ending screen
+-- respawn mechanics
 
 
 -- global vars
-local actual_frame=0
-local scene=nil
-local next_scene=nil
+local scene
+local next_scene
 local transition_frames_left=0
-local scene_frame=0
-local level_num=1
-local score=0
-local bugs_eaten=0
-local timer=0
-local frames_until_spawn_bug=0
-local spawns_until_pause=0
-local spider=nil
-local entities={}
-local new_entities={}
-local web_points={}
-local web_strands={}
-local tiles={}
-local spawn_points={}
+local scene_frame
+local level_num
+local score
+local bugs_eaten
+local timer
+local frames_until_spawn_bug
+local spawns_until_pause
+local spider
+local entities
+local new_entities
+local web_points
+local web_strands
+local tiles
+local level_spawn_points
 
 
 -- constants
-local frame_skip=1
 local tile_symbols="abcdefghijklmnopqrstuvwxyz0123456789"
 local tile_flip_matrix={8,4,2,1,128,64,32,16}
 local scenes={}
@@ -49,153 +48,52 @@ local friend_states={
 	}
 }
 local levels={
-	{
-		["spawn_point"]={30,50},
-		["tileset"]="construction",
-		["map"]={
-			"  uw   c   c   c",
-			"qmoqs  c   c   c",
-			"  uw ..ce..c   c",
-			" .uw.+.kmoqs   c",
-			" .uw.+.c   c   c",
-			" .uw.++c...c.  c",
-			" .uw.+*c+++c.  c",
-			" .uw.+*c***c+. c",
-			" .yw.+*c**+c++.c",
-			"  uw.++c++.c...c",
-			"  uw.+.c.+.kmoqs",
-			" .uw...i...     ",
-			"qqmos..g.++..   ",
-			"  uw  . .       ",
-			"aauwbbaabbaa aab"
-		}
-	},
-	{
-		["spawn_point"]={63,17},
-		["tileset"]="carrot",
-		["map"]={
-			"m77n        vrqn",
-			" 45  ... vtr 66n",
-			" 45  qsu   vr67n",
-			" 45qsu  ... o65n",
-			" opp  ..... m45 ",
-			"i20l..++++.. 45 ",
-			"e000j.+**+...45 ",
-			"e003f.+**+...45 ",
-			"g000f.+**+...op ",
-			"e020f.+**+. k20j",
-			"e000f.+**+.i000f",
-			"e003h.++++.e200h",
-			"g200j......g003j",
-			"cyyydaaaaaacyyyd",
-			"wwwwwwwwwwwwwwww"
-		}
-	},
-	{
-		["spawn_point"]={28,116},
-		["tileset"]="twig",
-		["map"]={
-			"                ",
-			"                ",
-			"                ",
-			"                ",
-			"                ",
-			"                ",
-			"   q            ",
-			"   o            ",
-			"   t            ",
-			"   t            ",
-			" n s     i      ",
-			" dbs   egc      ",
-			"   t egc        ",
-			"   tack         ",
-			"   t            "
-		}
-	}
+	-- spawn_x,spawn_y,tileset,tiles,is_bottomless
+	{21,45,"cave","rssqvsqarqvssupaaqqaql  kprssvn  kl kh. ih kqql  mn.if..gf.ijkl  kl.gh..ef.ghmn  in.gf..cd.gfkl  ml.ef..  .efml  kn.ef.+...cdkj  il.ef.+++.  ih  gj.cd.+*++..gf  gh.  .+**++.ef  gh....+***+.cd  cd.++++++++.        .....                      ",true},
+	{30,50,"construction","  uw   c   c   cqmoqs  c   c   c  uw ..ce..c   c .uw.+.kmoqs   c .uw.+.c   c   c .uw.++c...c.  c .uw.+*c+++c.  c .uw.+*c***c+. c .yw.+*c**+c++.c  uw.++c++.c...c  uw.+.c.+.kmoqs .uw...i...     qqmos..g.++..     uw  . .       aauwbbaabbaa aab",true},
+	{63,17,"carrot","m77n        vrqn 45  ... vtr 66n 45  qsu   vr67n 45qsu  ... o65n opp  ..... m45 i20l..++++.. 45 e000j.+**+...45 e003f.+**+...45 g000f.+**+...op e020f.+**+. k20je000f.+**+.i000fe003h.++++.e200hg200j......g003jcyyydaaaaaacyyydwwwwwwwwwwwwwwww"},
+	{28,116,"twig","                                                                                                   q               o               t               t             n s     i       dbs   egc         t egc           tack            t            ",true}
 }
 local tilesets={
+	-- base_sprite,{solid_bits}
 	["twig"]={145,{255,23, 23,0, 0,248, 232,55, 0,238, 103,0, 0,116, 238,238, 96,238}},
 	["carrot"]={128,{240,255, 254,255, 204,204, 204,136, 200,204, 236,255, 204,204, 255,239, 232,254, 255,63, 127,1}},
-	["construction"]={155,{0,0, 0,0, 0,255}}
+	["construction"]={155,{0,0, 0,0, 0,255}},
+	["cave"]={168,{255,9, 136,136, 136,136, 204,136, 238,204, 255,239, 254,255}}
 }
 local bug_species={
-	{
-		["species_name"]="fly",
-		["base_sprite"]=64,
-		["colors"]={12,13,5,1},
-		["points"]=1,
-		["wiggles"]=true
-	},
-	{
-		["species_name"]="beetle",
-		["base_sprite"]=80,
-		["colors"]={8,13,2,1},
-		["points"]=2,
-		["wiggles"]=false
-	},
-	{
-		["species_name"]="firefly",
-		["base_sprite"]=96,
-		["colors"]={9,4,2,1},
-		["points"]=3,
-		["wiggles"]=false
-	},
-	{
-		["species_name"]="hornet",
-		["base_sprite"]=112,
-		["colors"]={10,9,5,1},
-		["points"]=5,
-		["wiggles"]=true
-	},
-	{
-		["species_name"]="dragonfly",
-		["base_sprite"]=71,
-		["colors"]={11,3,5,1},
-		["points"]=5,
-		["wiggles"]=true
-	}
+	-- species_name,base_sprite,colors,points,wiggles
+	{"fly",64,{12,13,5,1},1,true},
+	{"beetle",80,{8,13,2,1},2},
+	{"firefly",96,{9,4,2,1},3},
+	{"hornet",112,{10,9,5,1},5,true},
+	{"dragonfly",71,{11,3,5,1},5,true}
 }
 local entity_classes={
 	["spider"]={
 		["render_layer"]=6,
-		["move_speed"]=1,
 		["gravity"]=0.05,
 		["mass"]=4,
-		["webbing"]=90,
-		["max_webbing"]=90,
+		["webbing"]=70,
+		["max_webbing"]=70,
 		["facing_x"]=0,
 		["facing_y"]=1,
-		["is_on_tile"]=false,
-		["is_on_web"]=false,
-		["is_in_freefall"]=false,
-		["is_holding_left"]=false,
-		["is_holding_right"]=false,
-		["is_holding_up"]=false,
-		["is_holding_down"]=false,
-		["is_holding_z"]=false,
-		["has_pressed_z"]=false,
-		["is_spinning_web"]=false,
-		["is_placing_web"]=false,
-		["spun_strand"]=nil,
+		-- ["is_on_tile"]=false,
+		-- ["is_on_web"]=false,
+		-- ["is_in_freefall"]=false,
+		-- ["is_spinning_web"]=false,
+		-- ["is_placing_web"]=false,
+		-- ["spun_strand"]=nil,
 		["frames_until_spin_web"]=0,
 		["web_uncollision_frames"]=0,
 		["hitstun_frames"]=0,
 		["update"]=function(entity)
-			-- record inputs
-			entity.is_holding_left=btn(0)
-			entity.is_holding_right=btn(1)
-			entity.is_holding_up=btn(2)
-			entity.is_holding_down=btn(3)
-			entity.is_holding_z=btn(4)
-			entity.has_pressed_z=btnp(4)
+			-- decrement counters
+			decrement_counter_prop(entity,"web_uncollision_frames")
+			decrement_counter_prop(entity,"hitstun_frames")
 			-- figure out if the spider is supported by anything
-			entity.web_uncollision_frames=decrement_counter(entity.web_uncollision_frames)
-			entity.hitstun_frames=decrement_counter(entity.hitstun_frames)
-			local web_x
-			local web_y
-			local web_square_dist
-			web_x,web_y,web_square_dist=calc_closest_spot_on_web(entity.x,entity.y,false)
-			entity.is_on_web=web_x!=nil and web_y!=nil and web_square_dist<=9 and entity.web_uncollision_frames<=0 and entity.hitstun_frames<=0
+			local web_x,web_y,web_square_dist=calc_closest_spot_on_web(entity.x,entity.y,false)
+			entity.is_on_web=web_x!=nil and web_square_dist<=9 and entity.web_uncollision_frames<=0 and entity.hitstun_frames<=0
 			entity.is_on_tile=is_solid_tile_at(entity.x,entity.y) and entity.hitstun_frames<=0
 			entity.is_in_freefall=not entity.is_on_tile and not entity.is_on_web
 			-- when on web, the spider is pulled towards the strands
@@ -208,24 +106,12 @@ local entity_classes={
 				entity.vy+=entity.gravity
 			-- move the spider
 			else
-				entity.vx=0
-				entity.vy=0
-				if entity.is_holding_left then
-					entity.vx-=entity.move_speed
-				end
-				if entity.is_holding_right then
-					entity.vx+=entity.move_speed
-				end
-				if entity.is_holding_up then
-					entity.vy-=entity.move_speed
-				end
-				if entity.is_holding_down then
-					entity.vy+=entity.move_speed
-				end
+				entity.vx=(btn(1) and 1 or 0)-(btn(0) and 1 or 0)
+				entity.vy=(btn(3) and 1 or 0)-(btn(2) and 1 or 0)
 				-- make sure the spider doesn't move faster when moving diagonally
-				if entity.vx!=0 and vy!=0 then
-					entity.vx*=sqrt(0.5)
-					entity.vy*=sqrt(0.5)
+				if entity.vx!=0 and entity.vy!=0 then
+					entity.vx*=0.7
+					entity.vy*=0.7
 				end
 			end
 			-- the spider stays under the speed limit
@@ -240,88 +126,81 @@ local entity_classes={
 				entity.facing_x=entity.vx/speed
 				entity.facing_y=entity.vy/speed
 			end
-			entity.frames_until_spin_web=decrement_counter(entity.frames_until_spin_web)
+			decrement_counter_prop(entity,"frames_until_spin_web")
 			-- the spider stops spinning web if it gets cut off at the base
 			if (entity.is_spinning_web or entity.is_placing_web) and not entity.spun_strand.is_alive then
-				entity.is_spinning_web=false
-				entity.is_placing_web=false
-				entity.spun_strand=nil
+				entity.is_spinning_web,entity.is_placing_web,entity.spun_strand=false -- ,false,nil
 				entity.finish_spinning_web(entity)
 			end
 			-- the spider places a spun web when z is pressed
-			if entity.is_placing_web and entity.has_pressed_z then
-				entity.is_placing_web=false
-				local web_point=entity.spin_web_point(entity,true,false)
-				entity.spun_strand.set_from(entity.spun_strand,web_point)
-				entity.spun_strand=nil
-				if web_point.is_in_freefall and not web_point.has_been_anchored and speed>0.8*entity.move_speed then
+			if entity.is_placing_web and btnp(4) then
+				local web_point=entity.spin_web_point(entity,true,false,true)
+				entity.spun_strand.from=web_point
+				entity.is_placing_web,entity.spun_strand=false -- ,nil
+				if web_point.is_in_freefall and not web_point.has_been_anchored and speed>0.8 then
 					entity.web_uncollision_frames=4
 				end
 				entity.finish_spinning_web(entity)
 			-- the spider starts spinning web when z is pressed
-			elseif not entity.is_spinning_web and entity.has_pressed_z and entity.webbing>0 then
-				entity.is_spinning_web=true
-				entity.frames_until_spin_web=0
-				entity.spun_strand=create_entity("web_strand",{["from"]=entity,["to"]=entity.spin_web_point(entity,true,true)})
+			elseif not entity.is_spinning_web and btnp(4) and entity.webbing>0 then
+				entity.is_spinning_web,entity.frames_until_spin_web=true,0
+				entity.spun_strand=create_entity("web_strand",{["from"]=entity,["to"]=entity.spin_web_point(entity,true,true,false)})
 			-- the spider stops spinning web when z is no longer held
-			elseif entity.is_spinning_web and not entity.is_holding_z then
-				entity.is_spinning_web=false
-				entity.is_placing_web=true
+			elseif entity.is_spinning_web and not btn(4) then
+				entity.is_placing_web,entity.is_spinning_web=true -- ,false
 			end
 			-- the spider continuously creates web while z is held
 			if entity.is_spinning_web and entity.frames_until_spin_web<=0 and entity.webbing>0 then
-				entity.frames_until_spin_web=5
-				local web_point=entity.spin_web_point(entity,false,true)
-				entity.spun_strand.set_from(entity.spun_strand,web_point)
-				entity.spun_strand=create_entity("web_strand",{["from"]=entity,["to"]=web_point})
-				entity.webbing=decrement_counter(entity.webbing)
+				local web_point=entity.spin_web_point(entity,false,true,false)
+				entity.spun_strand.from=web_point
+				entity.frames_until_spin_web,entity.spun_strand=5,create_entity("web_strand",{["from"]=entity,["to"]=web_point})
+				decrement_counter_prop(entity,"webbing")
 			end
 			-- the spider stays in bounds
-			spider.x=mid(3,spider.x,124)
-			spider.y=mid(-1,spider.y,116)
+			entity.x=mid(3,entity.x,124)
+			-- the spider can fall off the bottom of bottomless levels
+			if levels[level_num][5] then
+				entity.y=max(2,entity.y)
+				if entity.y>=130 then
+					entity.die(entity)
+				end
+			else
+				entity.y=mid(2,entity.y,116)
+			end
 		end,
 		["draw"]=function(entity)
-			local sprite=29
-			local dx=4
-			local dy=4
-			local flipped_x=false
-			local flipped_y=false
+			local sprite,dx,dy,flipped_x,flipped_y=29,3.5,3.5
 			if entity.facing_x<-0.4 then
-				flipped_x=true
-				dx=3
+				flipped_x,dx=true,2.5
 			elseif entity.facing_x<0.4 then
 				sprite=13
 			end
 			if entity.facing_y<-0.4 then
-				flipped_y=true
-				dy=3
+				flipped_y,dy=true,2.5
 			elseif entity.facing_y<0.4 then
 				sprite=45
 			end
 			-- flip through the walk cycle
 			if not entity.is_in_freefall and (entity.vx!=0 or entity.vy!=0) then
-				if scene_frame%10>=5 then
-					sprite+=2
-				else
-					sprite+=1
-				end
+				sprite+=1+flr(scene_frame%10/5)
 			end
 			if spider.hitstun_frames%4<2 then
-				spr(sprite,entity.x+0.5-dx,entity.y+0.5-dy,1,1,flipped_x,flipped_y)
+				spr(sprite,entity.x-dx,entity.y-dy,1,1,flipped_x,flipped_y)
 			end
 		end,
-		["spin_web_point"]=function(entity,can_be_fixed,is_being_spun)
+		["on_death"]=function()
+			-- create new spider
+		end,
+		["spin_web_point"]=function(entity,can_be_fixed,is_being_spun,prefer_tile)
+			local is_fixed=can_be_fixed and is_solid_tile_at(entity.x,entity.y)
 			-- search for an existing web point
-			if can_be_fixed then
-				local web_point
-				local square_dist
-				web_point,square_dist=calc_closest_web_point(entity.x,entity.y,true,true)
+			if can_be_fixed and (not is_fixed or not prefer_tile) then
+				local web_point,square_dist=calc_closest_web_point(entity.x,entity.y,true,true)
 				if web_point and square_dist<81 then
 					return web_point
 				end
 			end
 			-- otherwise just create a new one
-			local is_fixed=can_be_fixed and is_solid_tile_at(entity.x,entity.y)
 			return create_entity("web_point",{
 				["x"]=entity.x,
 				["y"]=entity.y,
@@ -339,21 +218,16 @@ local entity_classes={
 		end
 	},
 	["web_point"]={
-		["friction"]=0.1,
-		["gravity"]=0.02,
 		["mass"]=1,
-		["num_strands"]=0,
-		["caught_bug"]=nil,
+		-- ["has_strands_attached"]=false,
+		-- ["caught_bug"]=nil,
 		["add_to_game"]=function(entity)
 			add(web_points,entity)
 		end,
 		["update"]=function(entity)
 			if entity.is_in_freefall then
-				entity.vy+=entity.gravity
-				entity.vx*=(1-entity.friction)
-				entity.vy*=(1-entity.friction)
-				entity.vx=mid(-3,entity.vx,3)
-				entity.vy=mid(-3,entity.vy,3)
+				entity.vx=0.9*mid(-3,entity.vx,3)
+				entity.vy=0.9*mid(-3,entity.vy+0.02,3)
 				entity.x+=entity.vx
 				entity.y+=entity.vy
 			end
@@ -362,89 +236,61 @@ local entity_classes={
 			end
 			-- we use a silly solution to count strand connections
 			-- a point without any strands shouldn't exist
-			if entity.frames_alive>1 and entity.num_strands==0 then
+			if entity.frames_alive>1 and not entity.has_strands_attached then
 				entity.die(entity)
 			end
-			entity.num_strands=0
+			entity.has_strands_attached=false
 		end
 	},
 	["web_strand"]={
 		["render_layer"]=3,
-		["spring_force"]=0.25,
-		["elasticity"]=1.65,
-		["base_length"]=5,
 		["stretched_length"]=5,
-		["break_length"]=25,
 		["percent_elasticity_remaining"]=1,
+		-- ["spring_force"]=0.25,
+		-- ["elasticity"]=1.65,
+		-- ["base_length"]=5,
+		-- ["break_length"]=25,
 		["add_to_game"]=function(entity)
 			add(web_strands,entity)
 		end,
 		["update"]=function(entity)
-			local from=entity.from
-			local to=entity.to
+			local from,to=entity.from,entity.to
 			-- count points attached to the strand
-			if from.class_name=="web_point" then
-				from.num_strands+=1
-			end
-			if to.class_name=="web_point" then
-				to.num_strands+=1
-			end
+			from.has_strands_attached=true
+			to.has_strands_attached=true
 			-- strands transfer anchored status
 			if from.class_name=="web_point" and to.class_name=="web_point" and not from.is_being_spun and not to.is_being_spun and (from.has_been_anchored or to.has_been_anchored) then
 				from.has_been_anchored=true
 				to.has_been_anchored=true
 			end
 			-- find the current length of the strand
-			local dx=to.x-from.x
-			local dy=to.y-from.y
+			local dx,dy=to.x-from.x,to.y-from.y
 			local len=sqrt(dx*dx+dy*dy)
 			-- if the strand stretches too far, it loses elasticity
-			local min_len=entity.base_length*(1+entity.elasticity)
-			local max_len=entity.break_length -- not multiplied by elasticity b/c it is 0 at the break length
-			if len>min_len then
-				local percent_elasticity=mid(0,1-((len-min_len)/(max_len-min_len)),1)
-				if percent_elasticity<=entity.percent_elasticity_remaining then
-					entity.percent_elasticity_remaining=percent_elasticity
-					entity.stretched_length=len/(1+entity.elasticity*percent_elasticity)
-				end
+			local percent_elasticity=mid(0,(25-len)/11.75,1)
+			if percent_elasticity<entity.percent_elasticity_remaining then
+				entity.percent_elasticity_remaining,entity.stretched_length=percent_elasticity,len/(1+1.65*percent_elasticity)
 			end
 			-- bring the two points closer to each other
 			if len>entity.stretched_length and entity.percent_elasticity_remaining>0 then
-				local elastic_dist=len-entity.stretched_length
-				local f=elastic_dist*entity.spring_force
-				local m1=from.mass
-				local m2=to.mass
+				local f=(len-entity.stretched_length)/4
+				local from_mult,to_mult=f*to.mass/from.mass/len,f*from.mass/to.mass/len
 				if from.is_in_freefall then
-					from.vx+=mid(-2,f*(m2/m1)*(dx/len),2)
-					from.vy+=mid(-2,f*(m2/m1)*(dy/len),2)
+					from.vx+=mid(-2,from_mult*dx,2)
+					from.vy+=mid(-2,from_mult*dy,2)
 				end
 				if to.is_in_freefall then
-					to.vx-=mid(-2,f*(m1/m2)*(dx/len),2)
-					to.vy-=mid(-2,f*(m1/m2)*(dy/len),2)
+					to.vx-=mid(-2,to_mult*dx,2)
+					to.vy-=mid(-2,to_mult*dy,2)
 				end
 			end
 			-- die if the strand gets too long or if the points die
-			if len>=entity.break_length or not from.is_alive or not to.is_alive then
+			if len>=25 or not from.is_alive or not to.is_alive then
 				entity.die(entity)
 			end
 		end,
 		["draw"]=function(entity)
-			if entity.percent_elasticity_remaining>0.7 then
-				color(7)
-			elseif entity.percent_elasticity_remaining>0.5 then
-				color(15)
-			elseif entity.percent_elasticity_remaining>0.2 then
-				color(9)
-			else
-				color(8)
-			end
-			line(entity.from.x,entity.from.y,entity.to.x,entity.to.y)
-		end,
-		["set_to"]=function(entity,to)
-			entity.to=to
-		end,
-		["set_from"]=function(entity,from)
-			entity.from=from
+			line(entity.from.x,entity.from.y,entity.to.x,entity.to.y,({8,8,9,15,7})[ceil(1+4*entity.percent_elasticity_remaining)])
 		end
 	},
 	["bug_spawn_flash"]={
@@ -452,39 +298,27 @@ local entity_classes={
 		["frames_to_death"]=15,
 		["draw"]=function(entity)
 			if entity.frames_to_death<=15 then
-				colorwash(bug_species[entity.species].colors[1])
+				colorwash(bug_species[entity.species][3][1])
 				spr(92-ceil(entity.frames_to_death/3),entity.x-3,entity.y-4)
 				pal()
 			end
 		end,
 		["on_death"]=function(entity)
-			create_entity("bug",{
-				["species"]=entity.species,
-				["x"]=entity.x,
-				["y"]=entity.y
-			})
+			create_entity("bug",extract_props(entity,{"species","x","y"}))
 		end
 	},
 	["bug"]={
 		["render_layer"]=2,
-		["is_catchable"]=false,
-		["caught_web_point"]=nil,
+		-- ["is_catchable"]=false,
+		-- ["caught_web_point"]=nil,
 		["frames_until_escape"]=0,
 		["vy"]=0.35,
 		["init"]=function(entity)
-			local k
-			local v
-			for k,v in pairs(bug_species[entity.species]) do
-				entity[k]=v
+			local k,v
+			for k,v in pairs({"species_name","base_sprite","colors","points","wiggles"}) do
+				entity[v]=bug_species[entity.species][k]
 			end
-			local c=entity.colors
-			create_entity("ripple",{
-				["target"]=entity,
-				["frames_to_death"]=48,
-				["starting_radius"]=15,
-				["expansion_rate"]=-0.25,
-				["colors"]={entity.colors[4]}
-			})
+			create_entity("ripple",{["target"]=entity})
 		end,
 		["update"]=function(entity)
 			-- bugs move downwards while spawning
@@ -518,14 +352,11 @@ local entity_classes={
 			end
 			-- bugs escape webs in time or if they break
 			if entity.frames_until_escape>0 and entity.caught_web_point then
-				entity.frames_until_escape=decrement_counter(entity.frames_until_escape)
+				decrement_counter_prop(entity,"frames_until_escape")
 				if entity.frames_until_escape<=0 then
 					-- fireflies explode, actually
 					if entity.species_name=="firefly" then
-						create_entity("firefly_explosion",{
-							["x"]=entity.x,
-							["y"]=entity.y	
-						})
+						create_entity("firefly_explosion",extract_props(entity,{"x","y"}))
 						local x
 						local y
 						foreach(web_points,function(web_point)
@@ -582,12 +413,9 @@ local entity_classes={
 						spider.vx*=0.5
 					end
 				elseif entity.is_catchable or entity.caught_web_point then
-					create_entity("floating_points",{
-						["text"]="+"..entity.points.."0",
-						["colors"]=entity.colors,
-						["x"]=entity.x,
-						["y"]=entity.y	
-					})
+					local props=extract_props(entity,{"colors","x","y"})
+					props.text="+"..entity.points.."0"
+					create_entity("floating_points",props)
 					score+=entity.points
 					bugs_eaten+=1
 					spider.webbing=min(spider.webbing+2,spider.max_webbing)
@@ -724,10 +552,8 @@ local entity_classes={
 	["floating_points"]={
 		["render_layer"]=8,
 		["frames_to_death"]=20,
-		["vy"]=-1,
 		["update"]=function(entity)
-			entity.x+=entity.vx
-			entity.y+=entity.vy
+			entity.y-=0.5
 		end,
 		["draw"]=function(entity)
 			print(entity.text,entity.x-2*#entity.text,entity.y-2,entity.colors[max(1,flr(entity.frames_alive/2-5))])
@@ -735,41 +561,30 @@ local entity_classes={
 	},
 	["ripple"]={
 		["render_layer"]=1,
+		["frames_to_death"]=48,
 		["draw"]=function(entity)
-			local x=entity.x
-			local y=entity.y
-			if entity.target then
-				x=entity.target.x
-				y=entity.target.y
-			end
-			color(entity.colors[max(1,1+#entity.colors-ceil(entity.frames_to_death/2))])
-			circ(x,y,entity.starting_radius+entity.expansion_rate*entity.frames_alive)
+			circ(entity.target.x,entity.target.y,15-entity.frames_alive/4,1)
 		end
 	},
 	["character_portrait"]={
 		["draw"]=function(entity)
 			color(7)
+			local x,y=entity.x,entity.y
 			if entity.is_highlighted then
-				spr(44,entity.x-10,entity.y-10)
-				spr(44,entity.x+4,entity.y-10,1,1,true)
-				spr(44,entity.x-10,entity.y+4,1,1,false,true)
-				spr(44,entity.x+4,entity.y+4,1,1,true,true)
-				line(entity.x-4,entity.y-10,entity.x+5,entity.y-10)
-				line(entity.x-4,entity.y+11,entity.x+5,entity.y+11)
-				line(entity.x-10,entity.y-4,entity.x-10,entity.y+5)
-				line(entity.x+11,entity.y-4,entity.x+11,entity.y+5)
+				spr(44,x-10,y-10)
+				spr(44,x+4,y-10,1,1,true)
+				spr(44,x-10,y+4,1,1,false,true)
+				spr(44,x+4,y+4,1,1,true,true)
+				line(x-4,y-10,x+5,y-10)
+				line(x-4,y+11,x+5,y+11)
+				line(x-10,y-4,x-10,y+5)
+				line(x+11,y-4,x+11,y+5)
 			else
 				colorwash(13)
-				rect(entity.x-9,entity.y-9,entity.x+10,entity.y+10,1)
+				rect(x-9,y-9,x+10,y+10)
 			end
-			sspr(48,0,16,16,entity.x-7,entity.y-7)
+			sspr(48,0,16,16,x-7,y-7)
 			pal()
-		end,
-		["highlight"]=function(entity)
-			entity.is_highlighted=true
-		end,
-		["unhighlight"]=function(entity)
-			entity.is_highlighted=false
 		end
 	},
 	["dialog_screen"]={
@@ -784,14 +599,15 @@ local entity_classes={
 			entity.load_dialog(entity,entity.friend_state.dialog_index)
 		end,
 		["update"]=function(entity)
+			local speech_box=entity.speech_box
 			if btnp(4) then
 				-- show the text and responses when z is pressed
-				if entity.speech_box.frames_fully_shown<8 then
-					entity.speech_box.fully_show(entity.speech_box)
+				if speech_box.frames_fully_shown<8 then
+					speech_box.fully_show(speech_box)
 				-- if they are already shown, move on to the next dialog when z is pressed
-				elseif entity.speech_box.frames_fully_shown>12 then
+				elseif speech_box.frames_fully_shown>12 then
 					local next_dialog_index=entity.dialog[entity.button_index+1][2]
-					if next_dialog_index==nil then
+					if not next_dialog_index then
 						next_dialog_index=entity.friend_state.dialog_index+1
 					end
 					if next_dialog_index==-1 then
@@ -801,29 +617,27 @@ local entity_classes={
 					end
 				end
 			end
-			if entity.speech_box.frames_fully_shown>8 then
+			if speech_box.frames_fully_shown>8 then
+				local buttons,dy,i=entity.buttons,({15,7,0,-15})[#entity.dialog-1]
 				-- create buttons once the text is fully shown
-				if #entity.buttons<#entity.dialog-1 then
-					local i
-					local dy=({15,7,0,-15})[#entity.dialog-1]
+				if #buttons<#entity.dialog-1 then
 					for i=2,#entity.dialog do
-						add(entity.buttons,create_entity("dialog_button",{
+						add(buttons,create_entity("dialog_button",{
 							["text"]=entity.dialog[i][1],
 							["y"]=48+15*i+dy
 						}))
 					end
-					entity.button_index=1
-					entity.buttons[1].highlight(entity.buttons[1])
+					entity.button_index,buttons[1].is_highlighted=1,true
 				end
 				-- scroll up and down through the buttons
-				if #entity.buttons>0 and (btnp(2) or btnp(3)) then
-					entity.buttons[entity.button_index].unhighlight(entity.buttons[entity.button_index])
+				if #buttons>0 and (btnp(2) or btnp(3)) then
+					buttons[entity.button_index].is_highlighted=false
 					if btnp(3) then
-						entity.button_index=min(entity.button_index+1,#entity.buttons)
+						entity.button_index=min(entity.button_index+1,#buttons)
 					elseif btnp(2) then
 						entity.button_index=max(entity.button_index-1,1)
 					end
-					entity.buttons[entity.button_index].highlight(entity.buttons[entity.button_index])
+					buttons[entity.button_index].is_highlighted=true
 				end
 			end
 		end,
@@ -837,9 +651,7 @@ local entity_classes={
 			end)
 			entity.buttons={}
 			-- load dialog state
-			entity.button_index=0
-			entity.friend_state.dialog_index=dialog_index
-			entity.dialog=entity.friend.dialog[dialog_index]
+			entity.button_index,entity.friend_state.dialog_index,entity.dialog=0,dialog_index,entity.friend.dialog[dialog_index]
 			-- create a speech box
 			entity.speech_box=create_entity("speech_box",{
 				["text"]=entity.dialog[1][1],
@@ -851,38 +663,31 @@ local entity_classes={
 		end
 	},
 	["dialog_button"]={
-		["is_highlighted"]=false,
+		-- ["is_highlighted"]=false,
 		["draw"]=function(entity)
-			local d=0
-			local d2=0
+			local y,d,d2=entity.y,0,0
 			if entity.is_highlighted then
-				line(11,entity.y+11,116,entity.y+11,5)
+				line(11,y+11,116,y+11,5)
 				color(7)
-				spr(60,60-3,entity.y-4)
-				spr(60,60-3+6-1,entity.y-4,1,1,true)
-				spr(61,60-3,entity.y+11-4)
-				spr(61,60-3+6-1,entity.y+11-4,1,1,true)
+				spr(60,57,y-4)
+				spr(60,62,y-4,1,1,true)
+				spr(61,57,y+7)
+				spr(61,62,y+7,1,1,true)
 				d2=7
 			else
 				colorwash(13)
 				d=2
 			end
-			line(15,entity.y,63-d2,entity.y)
-			line(63+d2,entity.y,112,entity.y)
-			line(15,entity.y+10,63-d2,entity.y+10)
-			line(63+d2,entity.y+10,112,entity.y+10)
-			spr(28,7+d,entity.y-1)
-			spr(28,7+d,entity.y+4,1,1,false,true)
-			spr(28,113-d,entity.y-1,1,1,true)
-			spr(28,113-d,entity.y+4,1,1,true,true)
-			print(entity.text,64-2*#entity.text,entity.y+3)
+			line(15,y,63-d2,y)
+			line(63+d2,y,112,y)
+			line(15,y+10,63-d2,y+10)
+			line(63+d2,y+10,112,y+10)
+			spr(28,7+d,y-1)
+			spr(28,7+d,y+4,1,1,false,true)
+			spr(28,113-d,y-1,1,1,true)
+			spr(28,113-d,y+4,1,1,true,true)
+			print(entity.text,64-2*#entity.text,y+3)
 			pal()
-		end,
-		["highlight"]=function(entity)
-			entity.is_highlighted=true
-		end,
-		["unhighlight"]=function(entity)
-			entity.is_highlighted=false
 		end
 	},
 	["speech_box"]={
@@ -895,12 +700,11 @@ local entity_classes={
 			end
 		end,
 		["draw"]=function(entity)
-			local c=entity.characters_per_line
-			local r
+			local c,r=entity.characters_per_line
 			for r=0,3 do
-				local text=sub(entity.text,(c+1)*r+1,min(entity.characters_shown,(c+1)*r+c))
+				local text=sub(entity.text,c*r+r+1,min(entity.characters_shown,c*r+r+c))
 				print(text,entity.x,entity.y+9*r,7)
-				if entity.show_blinky_arrow and entity.frames_fully_shown%30>10 and flr(#entity.text/entity.characters_per_line)==r then
+				if entity.show_blinky_arrow and entity.frames_fully_shown%30>10 and flr(#entity.text/c)==r then
 					spr(59,entity.x+4*#text,entity.y+9*r)
 				end
 			end
@@ -911,13 +715,12 @@ local entity_classes={
 		end
 	},
 	["character_grid"]={
-		["selected_character"]=nil,
+		-- ["selected_character"]=nil,
 		["row"]=2,
 		["col"]=2,
 		["characters"]={},
 		["init"]=function(entity)
-			local r
-			local c
+			local r,c
 			for r=1,3 do
 				entity.characters[r]={}
 				for c=1,3 do
@@ -933,27 +736,23 @@ local entity_classes={
 			-- button presses move you about the grid
 			local button_pressed=false
 			if btnp(0) then
-				entity.col=wrap_number(entity.col-1,1,3)
-				button_pressed=true
+				entity.col,button_pressed=wrap_number(entity.col-1,1,3),true
 			end
 			if btnp(1) then
-				entity.col=wrap_number(entity.col+1,1,3)
-				button_pressed=true
+				entity.col,button_pressed=wrap_number(entity.col+1,1,3),true
 			end
 			if btnp(2) then
-				entity.row=wrap_number(entity.row-1,1,3)
-				button_pressed=true
+				entity.row,button_pressed=wrap_number(entity.row-1,1,3),true
 			end
 			if btnp(3) then
-				entity.row=wrap_number(entity.row+1,1,3)
-				button_pressed=true
+				entity.row,button_pressed=wrap_number(entity.row+1,1,3),true
 			end
 			if button_pressed then
 				if entity.selected_character then
-					entity.selected_character.unhighlight(entity.selected_character)
+					entity.selected_character.is_highlighted=false
 				end
 				entity.selected_character=entity.characters[entity.row][entity.col]
-				entity.selected_character.highlight(entity.selected_character)
+				entity.selected_character.is_highlighted=true
 			end
 			-- pressing z selects a character and begins a conversations
 			if entity.selected_character and btnp(4) then
@@ -966,7 +765,7 @@ local entity_classes={
 
 -- main functions
 function _init()
-	init_scene("game")
+	init_scene("title")
 end
 
 function _update()
@@ -976,10 +775,6 @@ function _update()
 			init_scene(next_scene)
 			next_scene=nil
 		end
-	end
-	actual_frame=increment_looping_counter(actual_frame)
-	if actual_frame%frame_skip>0 then
-		return
 	end
 	scene_frame=increment_looping_counter(scene_frame)
 	scenes[scene][2]()
@@ -1007,13 +802,11 @@ function _draw()
 	-- draw the scene transition
 	camera()
 	if transition_frames_left>0 then
-		local t=transition_frames_left
+		local t,x,y=transition_frames_left
 		if t<30 then
 			t+=30
 		end
-		local y
 		for y=0,128,6 do
-			local x
 			for x=0,128,6 do
 				local size=mid(0,50-t+y/10-x/40,4)
 				if transition_frames_left<30 then
@@ -1041,7 +834,7 @@ end
 
 function update_title()
 	if btnp(4) and scene_frame>15 then
-		transition_to_scene("conversation")
+		transition_to_scene("game")
 	end
 end
 
@@ -1057,17 +850,11 @@ end
 
 -- game functions
 function init_game()
+	local level=levels[level_num]
 	init_simulation()
-	score=0
-	bugs_eaten=0
-	timer=120
-	frames_until_spawn_bug=0
-	spawns_until_pause=3
-	load_tiles(levels[level_num].map,levels[level_num].tileset)
-	spider=create_entity("spider",{
-		["x"]=levels[level_num].spawn_point[1],
-		["y"]=levels[level_num].spawn_point[2]
-	})
+	score,bugs_eaten,timer,frames_until_spawn_bug,spawns_until_pause=0,0,120,0,3
+	load_tiles(level[4],level[3])
+	spider=create_entity("spider",{["x"]=level[1],["y"]=level[2]})
 end
 
 function update_game()
@@ -1079,44 +866,31 @@ function update_game()
 		timer=decrement_counter(timer)
 	end
 
-	-- spawn bugs from 1:30 to 0:03
-	if timer<=90 and timer>3 then
+	-- spawn bugs from 1:30 to 0:04
+	if timer==mid(4,timer,90) then
 		local phase=min(flr(4-timer/30),3)
-		local max_bug_type=flr(0.5+(level_num+phase)/1.5)
-
 		-- spawn a new bug every so often
 		frames_until_spawn_bug=decrement_counter(frames_until_spawn_bug)
 		if frames_until_spawn_bug<=0 then
-			local dir_x=rnd_int(-1,1)
-			local dir_y=rnd_int(-1,1)
+			local max_bug_type,dir_x,dir_y,num_bugs,r,bug_type,i=flr(0.5+(level_num+phase)/1.5),rnd_int(-1,1),rnd_int(-1,1),rnd_int(1,3),rnd(1),1
 			if dir_x==0 and dir_y==0 then
 				dir_x=1
 			end
-			local num_bugs=rnd_int(1,3)
-			local spawn_point=spawn_points[num_bugs][rnd_int(1,#spawn_points[num_bugs])]
-			local i
-			local r=rnd(1)
-			local bug_type
-			if r<0.2 and max_bug_type>=2 then
-				bug_type=2
-			elseif r<0.3 and max_bug_type>=3 then
-				bug_type=3
-			elseif r<0.4 and max_bug_type>=4 then
-				bug_type=4
-			elseif r<0.5 and max_bug_type>=5 then
-				bug_type=5
-			else
-				bug_type=1
+			local spawn_point=level_spawn_points[num_bugs][rnd_int(1,#level_spawn_points[num_bugs])]
+			for i=5,2,-1 do
+				if r<i/10 and max_bug_type>=i then
+					bug_type=i
+				end
 			end
 			if bug_type>=max_bug_type then
 				num_bugs=1 -- fine that this is after num_bugs is first used
 			end
-			for i=0,num_bugs-1 do
+			for i=1,num_bugs do
 				create_entity("bug_spawn_flash",{
-					["frames_to_death"]=15+15*i,
+					["frames_to_death"]=15*i,
 					["species"]=bug_type,
-					["x"]=8*(spawn_point[1]+i*dir_x)-5,
-					["y"]=8*(spawn_point[2]+i*dir_y)-10
+					["x"]=8*(spawn_point[1]+i*dir_x-dir_x)-5,
+					["y"]=8*(spawn_point[2]+i*dir_y-dir_y)-10
 				})
 			end
 			-- phase 1: 1.0s to 2.5s between spawns
@@ -1140,47 +914,28 @@ function draw_game()
 	draw_simulation()
 	-- draw ui
 	camera()
+	-- rectfill(0,0,127,7,0)
 	-- draw webbing meter
-	rectfill(0,0,127,7,0)
-	if spider.is_spinning_web then
-		color(7)
-	else
-		color(5)
-	end
+	color(spider.is_spinning_web and 7 or 5)
 	rectfill(35,2,35+50*spider.webbing/spider.max_webbing,5)
 	rect(35,1,85,6)
 	spr(62,87,0)
 	-- draw timer
-	local timer_text=flr(timer/60)..":"
-	local seconds=timer%60
-	if seconds<10 then
-		timer_text=timer_text.."0"
-	end
-	timer_text=timer_text..seconds
 	if timer<=5 and scene_frame%30<=20 then
 		color(8)
 	else
 		color(7)
 	end
-	print(timer_text,112,2)
+	print(flr(timer/60)..":"..(timer%60<10 and "0" or "")..timer%60,112,2)
 	-- draw score
-	local score_text
-	if score<=0 then
-		score_text="0"
-	else
-		score_text=score.."0"
-	end
-	print(score_text,1,2,7)
+	print(score<=0 and "0" or score.."0",1,2,7)
 end
 
 
 -- character select functions
 function init_character_select()
 	init_simulation()
-	create_entity("character_grid",{
-		["x"]=63,
-		["y"]=70
-	})
+	create_entity("character_grid",{["x"]=63,["y"]=70})
 end
 
 function update_character_select()
@@ -1189,7 +944,7 @@ end
 
 function draw_character_select()
 	draw_corners()
-	print("pick someone to talk to",64-23*2,15,7)
+	print("pick someone to talk to",18,15,7)
 	draw_simulation()
 end
 
@@ -1227,26 +982,22 @@ end
 
 function draw_scoring()
 	draw_corners()
-	print("level complete!",35,24,7)
-	line(35,30,92,30,7)
-	local final_frame=44+bugs_eaten+score
-	local f=scene_frame-40
+	color(7)
+	print("level complete!",35,24)
+	line(35,30,92,30)
+	local final_frame,f=44+bugs_eaten+score,scene_frame-40
 	-- draw number of bugs eaten
-	print("bugs eaten",15,50,7)
+	print("bugs eaten",15,50)
 	local b=mid(0,f,bugs_eaten)
 	if b>0 or b>=bugs_eaten and scene_frame>40 then
-		local bugs_text=""..b
-		print(bugs_text,110-4*#bugs_text,50,7)
+		print(b,110-4*#(""..b),50)
 	end
 	-- draw score
-	print("score",15,68,7)
+	print("score",15,68)
 	if b>=bugs_eaten and scene_frame>40 then
 		local s=mid(0,f-bugs_eaten,score)
-		local score_text="0"
-		if s>0 then
-			score_text=s.."0"
-		end
-		print(score_text,110-4*#score_text,68,7)
+		local score_text=s==0 and "0" or s.."0"
+		print(score_text,110-4*#score_text,68)
 	end
 	-- draw continue text
 	if scene_frame>=final_frame then
@@ -1259,10 +1010,7 @@ end
 
 -- simulation functions
 function init_simulation()
-	entities={}
-	new_entities={}
-	web_points={}
-	web_strands={}
+	entities,new_entities,web_points,web_strands={},{},{},{}
 	reset_tiles()
 end
 
@@ -1303,8 +1051,7 @@ function draw_simulation()
 	--  6=spider
 	--  7=foreground
 	--  8=ui effects
-	local i
-	local j=#entities+1
+	local j,i=#entities+1
 	-- draw background entities
 	for i=1,#entities do
 		if entities[i].render_layer>2 then
@@ -1350,7 +1097,7 @@ end
 -- entity functions
 function create_entity(class_name,args)
 	-- create default entity
-	local entity={
+	local entity,k,v={
 		["class_name"]=class_name,
 		["render_layer"]=4,
 		["x"]=0,
@@ -1371,16 +1118,12 @@ function create_entity(class_name,args)
 		end
 	}
 	-- add class properties/methods onto it
-	local k
-	local v
 	for k,v in pairs(entity_classes[class_name]) do
 		entity[k]=v
 	end
 	-- add properties onto it from the arguments
-	if args then
-		for k,v in pairs(args) do
-			entity[k]=v
-		end
+	for k,v in pairs(args) do
+		entity[k]=v
 	end
 	-- initialize it
 	entity.init(entity,args)
@@ -1391,38 +1134,30 @@ end
 
 function add_new_entities_to_game()
 	foreach(new_entities,function(entity)
-		if entity.add_to_game(entity)!=false then
-			add(entities,entity)
-		end
+		entity.add_to_game(entity)
+		add(entities,entity)
 	end)
 	new_entities={}
-end
-
-function is_alive(entity)
-	return entity.is_alive
 end
 
 
 -- tile functions
 function reset_tiles()
-	tiles={}
+	tiles,level_spawn_points={},{{},{},{}}
 	local i
 	for i=1,240 do
 		tiles[i]=false
 	end
-	spawn_points={{},{},{}}
 end
 
 function load_tiles(map,tileset_name)
 	-- loop through the 2d array of symbols
-	local c
+	local c,r
 	for c=1,16 do
-		local r
 		for r=1,15 do
-			local symbol=sub(map[r],c,c)
+			local tile_coords,s,tile_index,i={c,r},r*16+c-16
+			local symbol=sub(map,s,s)
 			-- find the tile index of the symbol
-			local tile_index
-			local i
 			for i=1,#tile_symbols do
 				if symbol==sub(tile_symbols,i,i) then
 					tile_index=i
@@ -1434,30 +1169,27 @@ function load_tiles(map,tileset_name)
 				tiles[c*15+r-15]=create_tile(tilesets[tileset_name],tile_index,c,r)
 			-- otherwise we may need to log it as a spawn point
 			elseif symbol=="." then
-				add(spawn_points[1],{c,r})
+				add(level_spawn_points[1],tile_coords)
 			elseif symbol=="+" then
-				add(spawn_points[1],{c,r})
-				add(spawn_points[2],{c,r})
+				add(level_spawn_points[1],tile_coords)
+				add(level_spawn_points[2],tile_coords)
 			elseif symbol=="*" then
-				add(spawn_points[1],{c,r})
-				add(spawn_points[2],{c,r})
-				add(spawn_points[3],{c,r})
+				add(level_spawn_points[1],tile_coords)
+				add(level_spawn_points[2],tile_coords)
+				add(level_spawn_points[3],tile_coords)
 			end
 		end
 	end
 end
 
 function create_tile(tileset,tile_index,col,row)
-	local is_flipped=(tile_index%2==0)
-	local half_tile_index=ceil(tile_index/2)
-	local solid_bits={255,255}
+	local is_flipped,half_tile_index,solid_bits=(tile_index%2==0),ceil(tile_index/2),{255,255}
 	if #tileset[2]>=2*half_tile_index then
 		solid_bits={tileset[2][2*half_tile_index-1],tileset[2][2*half_tile_index]}
 	end
 	if is_flipped then
 		for i=1,2 do
-			local new_bits=0
-			local j
+			local new_bits,j=0
 			for j=1,#tile_flip_matrix do
 				if band(solid_bits[i],2^(j-1))>0 then
 					new_bits+=tile_flip_matrix[j]
@@ -1476,16 +1208,15 @@ function create_tile(tileset,tile_index,col,row)
 end
 
 function get_tile_at(x,y)
-	if y>=0 then
+	if y>=0 and y<=116 then
 		return tiles[1+flr(x/8)*15+flr(y/8)]
 	end
 end
 
 function is_solid_tile_at(x,y)
-	local tile=get_tile_at(x,y)
+	-- turn the position into a bit 1 to 16
+	local tile,bit=get_tile_at(x,y),1+flr(x/2)%4+4*(flr(y/2)%4)
 	if tile then
-		-- turn the position into a bit 1 to 16
-		local bit=1+flr(x/2)%4+4*(flr(y/2)%4)
 		-- check that against the tile's solid_bits
 		if bit>8 then
 			return band(2^(bit-9),tile.solid_bits[2])>0
@@ -1507,13 +1238,7 @@ function ceil(n)
 end
 
 function wrap_number(n,min,max)
-	if n<min then
-		return max
-	elseif n>max then
-		return min
-	else
-		return n
-	end
+	return n<min and max or (n>max and min or n)
 end
 
 function create_vector(x,y,magnitude)
@@ -1526,16 +1251,12 @@ function create_vector(x,y,magnitude)
 end
 
 function calc_square_dist(x1,y1,x2,y2)
-	local dx=x2-x1
-	local dy=y2-y1
+	local dx,dy=x2-x1,y2-y1
 	return dx*dx+dy*dy
 end
 
 function calc_closest_point_on_line(x1,y1,x2,y2,cx,cy)
-	local match_x
-	local match_y
-	local dx=x2-x1
-	local dy=y2-y1
+	local dx,dy,match_x,match_y=x2-x1,y2-y1
 	-- if the line is nearly vertical, it's easy
 	if 0.1>dx and dx>-0.1 then
 		match_x=x1
@@ -1547,11 +1268,9 @@ function calc_closest_point_on_line(x1,y1,x2,y2,cx,cy)
 	--otherwise we have a bit of math to do...
 	else
 		-- find equation of the line y=mx+b
-		local m=dy/dx
-		local b=y1-m*x1 -- b=y-mx
 		-- find reverse equation from circle
-		local m2=-dx/dy
-		local b2=cy-m2*cx -- b=y-mx
+		local m,m2=dy/dx,-dx/dy
+		local b,b2=y1-m*x1,cy-m2*cx -- b=y-mx  /  b=y-mx
 		-- figure out where their y-values are the same
 		match_x=(b2-b)/(m-m2) -- mx+b=m2x+b2 --> x=(b2-b)/(m-m2)
 		-- plug that into either formula to get the y-value at that x-value
@@ -1567,17 +1286,14 @@ end
 
 -- web functions
 function calc_closest_web_point(x,y,allow_unanchored,allow_occupied)
-	local square_dist
-	local closest_web_point=nil
-	local closest_square_dist=nil
+	local closest_web_point,closest_square_dist
 	foreach(web_points,function(web_point)
 		if not web_point.is_being_spun and
 			(allow_occupied or not web_point.caught_bug) and
 			(allow_unanchored or web_point.has_been_anchored) then
-			square_dist=calc_square_dist(x,y,web_point.x,web_point.y)
-			if closest_square_dist==nil or square_dist<closest_square_dist then
-				closest_web_point=web_point
-				closest_square_dist=square_dist
+			local square_dist=calc_square_dist(x,y,web_point.x,web_point.y)
+			if not closest_square_dist or square_dist<closest_square_dist then
+				closest_web_point,closest_square_dist=web_point,square_dist
 			end
 		end
 	end)
@@ -1585,30 +1301,22 @@ function calc_closest_web_point(x,y,allow_unanchored,allow_occupied)
 end
 
 function calc_closest_spot_on_web(x,y,allow_unanchored)
-	local closest_web_point
-	local closest_square_dist
-	closest_web_point,closest_square_dist=calc_closest_web_point(x,y,allow_unanchored,true)
-	local closest_x=nil
-	local closest_y=nil
+	local closest_x,closest_y
+	local closest_web_point,closest_square_dist=calc_closest_web_point(x,y,allow_unanchored,true)
 	if closest_web_point then
-		closest_x=closest_web_point.x
-		closest_y=closest_web_point.y
+		closest_x,closest_y=closest_web_point.x,closest_web_point.y
 	end
 	foreach(web_strands,function(web_strand)
 		if not web_strand.from.is_being_spun and not web_strand.to.is_being_spun and
 			(allow_unanchored or (web_strand.from.has_been_anchored and web_strand.to.has_been_anchored)) then
-			local x2
-			local y2
-			x2,y2=calc_closest_point_on_line(
+			local x2,y2=calc_closest_point_on_line(
 				web_strand.from.x,web_strand.from.y,
 				web_strand.to.x,web_strand.to.y,
 				x,y)
 			if x2!=nil and y2!=nil then
 				local square_dist=calc_square_dist(x,y,x2,y2)
-				if closest_square_dist==nil or square_dist<closest_square_dist then
-					closest_x=x2
-					closest_y=y2
-					closest_square_dist=square_dist
+				if not closest_square_dist or square_dist<closest_square_dist then
+					closest_x,closest_y,closest_square_dist=x2,y2,square_dist
 				end
 			end
 		end
@@ -1630,9 +1338,7 @@ end
 function noop() end
 
 function init_scene(s)
-	actual_frame=0
-	scene=s
-	scene_frame=0
+	scene,scene_frame=s,0
 	scenes[scene][1]()
 end
 
@@ -1644,11 +1350,14 @@ function transition_to_scene(s)
 end
 
 function increment_looping_counter(n)
-	n+=1
 	if n>32000 then
 		n-=10000
 	end
-	return n
+	return n+1
+end
+
+function decrement_counter_prop(obj,k)
+	obj[k]=decrement_counter(obj[k])
 end
 
 function decrement_counter(n)
@@ -1674,8 +1383,7 @@ function sort_list(list,func)
 end
 
 function filter_entity_list(list)
-	local i
-	local num_deleted=0
+	local num_deleted,i=0
 	for i=1,#list do
 		if not list[i].is_alive then
 			list[i]=nil
@@ -1686,12 +1394,12 @@ function filter_entity_list(list)
 	end
 end
 
-function throw_error(err)
-	cls()
-	color(8)
-	print(err)
-	exit()
-	purposeful_error[1]=nil -- nonsense
+function extract_props(obj,props_names)
+	local props,i={}
+	foreach(props_names,function(p)
+		props[p]=obj[p]
+	end)
+	return props
 end
 
 
@@ -1786,22 +1494,22 @@ d7700000007776676005000707007007dddddd000000000008000800080008000800080008000800
 3b33bbb349940000000000000000044499940000000bb330000000000000400000499944004949404499994011111100000500000aaaaaa0006776d00aaaa990
 33b33b3b44400000000000000049499994400000004b3bb0000000000044400000499994004999404499994011111111000500000aa999a000066d000aaaa990
 33bbb33b400000000000000044999999400000000043bbd00000000044940000004999940049944049999440111111110050500099a9a9a900000000066666d0
-8888888888888888888888888888888888888888760d0006d000706d760d00060000000000000000000000000000000000000000000000000000000000000000
-022224422222222422444222222222222222242076006006d006006d76aaaaaa0800080008000800080008000800080008000800080008000800080008000800
-0222ee22222222e22eee2222222222222222e22076000706d0d0006d76a5555a0080800000808000008080000080800000808000008080000080800000808000
-0220022222200e22eee00222222002222220022076000066dd00006d76aaaaaa0008000000080000000800000008000000080000000800000008000000080000
-02e002222220022eee2002222220022222e0022076000706d0d0006d76a55a5a0080800000808000008080000080800000808000008080000080800000808000
-0ee22222222e22eee2222222222222222e22222076006006d006006d76aaaaaa0800080008000800080008000800080008000800080008000800080008000800
-0e22222222e22eee2222222222222222e2222220760d0006d000706d76aaa55a0000000000000000000000000000000000000000000000000000000000000000
-888888888888888888888888888888888888888876d00006d000066d76aaaaaa0000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-08000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800
-00808000008080000080800000808000008080000080800000808000008080000080800000808000008080000080800000808000008080000080800000808000
-00080000000800000008000000080000000800000008000000080000000800000008000000080000000800000008000000080000000800000008000000080000
-00808000008080000080800000808000008080000080800000808000008080000080800000808000008080000080800000808000008080000080800000808000
-08000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+8888888888888888888888888888888888888888760d0006d000706d760d0006ddd22ddd0000002d0000002d0000022d002222d602222d6200222d22dd222ddd
+022224422222222422444222222222222222242076006006d006006d76aaaaaadd2225dd0000002d0000002d0000022200022d6602252266002222d2222d6622
+0222ee22222222e22eee2222222222222222e22076000706d0d0006d76a5555a652222dd0000002d0000002d00000222000252260225d2220222d2d6ddd6226d
+0220022222200e22eee00222222002222220022076000066dd00006d76aaaaaa65200256000000220000002d0000025200022d220222d6260225222622d22222
+02e002222220022eee2002222220022222e0022076000706d0d0006d76a55a5ad2000025000000220000002d0000002d00002dd2022522620222dd22d2222ddd
+0ee22222222e22eee2222222222222222e22222076006006d006006d76aaaaaa520000220000002d000000220000002d000022d600222d6602222666ddd2222d
+0e22222222e22eee2222222222222222e2222220760d0006d000706d76aaa55a200000020000000d0000002d0000002d000022220025222602252226222dddd2
+888888888888888888888888888888888888888876d00006d000066d76aaaaaa00000000000000020000002d0000002200002d220022ddd60222dd6200022222
+dddddddddddddddddddddddd00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+ddddddd2ddddddddd22ddddd08000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800
+d22dd6dddddddddddddd55dd00808000008080000080800000808000008080000080800000808000008080000080800000808000008080000080800000808000
+d65dd266dddddddd5dd22ddd00080000000800000008000000080000000800000008000000080000000800000008000000080000000800000008000000080000
+6d25dd22dddddddd25ddddd500808000008080000080800000808000008080000080800000808000008080000080800000808000008080000080800000808000
+d52225ddddddddddd225552d08000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800
+52222222dddddddddd2222dd00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+222222dddddddddddddddddd00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 08000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800
 00808000008080000080800000808000008080000080800000808000008080000080800000808000008080000080800000808000008080000080800000808000
