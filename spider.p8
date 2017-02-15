@@ -30,14 +30,31 @@ local tile_flip_matrix={8,4,2,1,128,64,32,16}
 local scenes={}
 local levels={
 	-- spawn_x,spawn_y,tileset,tiles,hazard,has_bottom
-	{63,17,"bridge","stst        mstststn ........ ui umsl.+*+*...ku kui...*+*+.ktstl u .+.++++...ju  u .......... u yyyyyyy10zzzzzzzwwwwweg..hfxxxxxwwweg......hfxxx4wc...+**+...dx52wa.+++**+++.bx364..++++++++..5762............376rooooooooooooq7rooooooooooooooq","river"},
-	{64,64,"space","     b                ..*+a+.7daa c6.+++++*+..     .a......+**    *+..gefh..+*+  +*+.i8#8@j.+b.  ..+.k!8%$n.+.2  4.+.m9$(!l.+.. b..+.o@%)(p.+*+  +*+..qsur..++   ...b.....a+*+ a w-y.++++++*+    ][-.+***...    a1{0..+++.7da b      a          ","space",true},
-	{30,50,"construction","  uw        c     uw        i    .uw.     ..g..  .uw...+*.+.... qmoqs.    .      .uw..*+..*+...  .uw.+..*+..*+. +.uw..+*..*+.+. ..yw.+..*+..*.. +.uw..*+.*..*+. +.uw.+.*+.*+.+. ..uw...+....+.. qqmos.    .       uw   ..   ..  aauwbbaabbaa aab","platforms"},
-	{63,17,"carrot","m77n        vrqn 45  ... vtr 66n 45  qsu   vr67n 45qsu  ... o65n opp  ..... m45 i20l..++++.. 45 e000j.+**+...45 e003f.+**+...45 g000f.+**+...op e020f.+**+. k20je000f.+**+.i000fe003h.++++.e200hg200j......g003jcyyydaaaaaacyyydwwwwwwwwwwwwwwww",nil,true},
-	{21,45,"cave","rssqvsqarqvssupaaqqaql  kprssvn  kl kh. ih kqql  mn.if..gf.ijkl  kl.gh..ef.ghmn  in.gf..cd.gfkl  ml.ef..  .efml  kn.ef.+...cdkj  il.ef.+++.  ih  gj.cd.+*++..gf  gh.  .+**++.ef  gh....+***+.cd  cd.++++++++.        .....                      ",nil}
+	-- {20,80,"carrot","m77n        vrqn 45  ... vtr 66n 45  qsu   vr67n 45qsu  ... o65n opp  ..... m45 i20l..++++.. 45 e000j.+**+...45 e003f.+**+...45 g000f.+**+...op e020f.+**+. k20je000f.+**+.i000fe003h.++++.e200hg200j......g003jcyyydaaaaaacyyydwwwwwwwwwwwwwwww",nil,true},
+	-- {64,64,"space","     b                ..*+a+.7daa c6.+++++*+..     .a......+**    *+..gefh..+*+  +*+.i8#8@j.+b.  ..+.k!8%$n.+.2  4.+.m9$(!l.+.. b..+.o@%)(p.+*+  +*+..qsur..++   ...b.....a+*+ a w-y.++++++*+    ][-.+***...    a1{0..+++.7da b      a          ","space",true},
+	{12,36,"bridge",
+"stst        msts"..
+"tstn ........ ui"..
+" umsl.+*+*...kv "..
+"kui...*+*+.ktstl"..
+" u .+.++++...jv "..
+" v .......... u "..
+"yyyyyyy10zzzzzzz"..
+"wwwwweg..hfxxxxx"..
+"wwweg......hfxxx"..
+"4wc...+**+...dx5"..
+"2wa.+++**+++.bx3"..
+"64..++++++++..57"..
+"62............37"..
+"6rooooooooooooq7"..
+"rooooooooooooooq","river"},
+	-- {30,50,"construction","  uw        c     uw        i    .uw.     ..g..  .uw...+*.+.... qmoqs.    .      .uw..*+..*+...  .uw.+..*+..*+. +.uw..+*..*+.+. ..yw.+..*+..*.. +.uw..*+.*..*+. +.uw.+.*+.*+.+. ..uw...+....+.. qqmos.    .       uw   ..   ..  aauwbbaabbaa aab","platforms"},
+	{21,45,"cave","rssqvsqarqvssupaaqqaql  kprssvn  kl kh. ih kqql  mn.if..gf.ijkl  kl.gh..ef.ghmn  in.gf..cd.gfkl  ml.ef..  .efml  kn.ef.+...cdkj  il.ef.+++.  ih  gj.cd.+*++..gf  gh.  .+**++.ef  gh....+***+.cd  cd.++++++++.        .....                      ",nil},
+	{50,50,"city","xw              54q.            32o...          10y.+*..        666.+*+*...   m 666.+*ef*++..!!!666f+*acf*efe###666aefa*a+acd###666cdcd+aed+.###666.++*+cd++.###666.++.....+.###666....ikj...###888..gsutvh..%%%((([](((((([](((---{}------{}---",nil,true},
 }
 local tilesets={
 	-- base_sprite,{solid_bits}
+	city={211,{0,0, 0,0, 0,0, 224,238, 232,255, 177,255, 0,185, 115,247, 17,51}},
 	carrot={128,{240,255, 254,255, 204,204, 204,136, 200,204, 236,255, 204,204, 255,239, 232,254, 255,63, 127,1}},
 	construction={145,{0,0, 0,0, 0,255}},
 	cave={158,{255,9, 136,136, 136,136, 204,136, 238,204, 255,239, 254,255}},
@@ -60,6 +77,7 @@ local entity_classes={
 		max_webbing=70,
 		facing_x=0,
 		facing_y=1,
+		length_of_spun_web=0,
 		-- is_on_tile=false,
 		-- is_on_web=false,
 		-- is_in_freefall=false,
@@ -116,8 +134,8 @@ local entity_classes={
 				entity.facing_x=entity.vx/speed
 				entity.facing_y=entity.vy/speed
 			end
-			decrement_counter_prop(entity,"frames_until_spin_web")
 			-- the spider stops spinning web if it gets cut off at the base
+			decrement_counter_prop(entity,"frames_until_spin_web")
 			if (entity.is_spinning_web or entity.is_placing_web) and not entity.spun_strand.is_alive then
 				entity.is_spinning_web,entity.is_placing_web,entity.spun_strand=false -- ,false,nil
 				entity.finish_spinning_web(entity)
@@ -133,15 +151,22 @@ local entity_classes={
 				entity.finish_spinning_web(entity)
 			-- the spider starts spinning web when z is pressed
 			elseif not entity.is_spinning_web and btnp(4) and entity.webbing>0 then
-				entity.is_spinning_web,entity.frames_until_spin_web=true,0
-				entity.spun_strand=create_entity("web_strand",{from=entity,to=entity.spin_web_point(entity,true,true,false)})
-			-- the spider stops spinning web when z is no longer held
+				entity.is_spinning_web,entity.frames_until_spin_web,entity.length_of_spun_web=true,0,0
+				local web_point=entity.spin_web_point(entity,true,true,false)
+				entity.spun_strand=create_entity("web_strand",{from=entity,to=web_point})
+				create_entity("web_length_hint",{
+					x=entity.x,
+					y=entity.y,
+					web_point=web_point
+				})
+			-- the spider stops spinning web when z is no longer held or it's been spinning for too long
 			elseif entity.is_spinning_web and not btn(4) then
 				entity.is_placing_web,entity.is_spinning_web=true -- ,false
 			end
 			-- the spider continuously creates web while z is held
-			if entity.is_spinning_web and entity.frames_until_spin_web<=0 and entity.webbing>0 then
+			if entity.is_spinning_web and entity.frames_until_spin_web<=0 and entity.webbing>0 and entity.length_of_spun_web<25 then
 				local web_point=entity.spin_web_point(entity,false,true,false)
+				entity.length_of_spun_web+=1
 				entity.spun_strand.from=web_point
 				entity.frames_until_spin_web,entity.spun_strand=5,create_entity("web_strand",{from=entity,to=web_point})
 				decrement_counter_prop(entity,"webbing")
@@ -213,6 +238,35 @@ local entity_classes={
 			foreach(web_points,function(web_point)
 				web_point.is_being_spun=false
 			end)
+		end
+	},
+	web_length_hint={
+		render_layer=8,
+		radius=5,
+		update=function(entity)
+			if entity.web_point then
+				entity.x=entity.web_point.x
+				entity.y=entity.web_point.y
+			end
+			if spider and spider.is_spinning_web and spider.webbing>0 and spider.length_of_spun_web<25 then
+				entity.radius+=mid(30/entity.radius, 1.5, 3)
+			end
+			if entity.frames_to_death<=0 and (not spider or not spider.is_alive or not (spider.is_placing_web or spider.is_spinning_web)) then
+				entity.frames_to_death=3
+			end
+		end,
+		draw=function(entity)
+			local x,y,f,a,s=entity.x,entity.y,entity.frames_to_death
+			if entity.radius<15 then
+				s=20
+			elseif entity.radius<30 then
+				s=12
+			else
+				s=8
+			end
+			for a=0,360,s do
+				pset(x+entity.radius*cos((a+entity.frames_alive)/360),y+entity.radius*sin((a+entity.frames_alive)/360),7)
+			end
 		end
 	},
 	spider_respawn={
@@ -942,7 +996,7 @@ function draw_simulation()
 			-- 				should_draw=band(2^(bit-1),tile.solid_bits[1])>0
 			-- 			end
 			-- 			if should_draw then
-			-- 				rectfill(x+2*x2,y+2*y2,x+2*x2+1,y+2*y2+1,8)
+			-- 				rectfill(x+2*x2,y+2*y2,x+2*x2+1,y+2*y2+1,7)
 			-- 			end
 			-- 		end
 			-- 	end
@@ -1392,36 +1446,36 @@ d7700000007776676005000707007007dddddd000000000008000800080008000800080008000800
 00000cc1000000006666666666666666006d6d66d66d6600dddd00006d60cd000075570005c6f66c113333631616666111111111633666613336116666666666
 000000cc0000000000066666666660000666d666d66d6660dd0000000600dc0000577500505cc6c0113333366111661111111111363116661111111166666666
 0000000c000000000000000000000000066d66666dd66660000000000000cd0000055000050ccc00133333113611111111111111636611111111111166666666
-dd66666666666666d6d000006d66d5556d666d666d555555005500500000333b333b3bb3ccccccccd3bbbbbb3b3b33bb544444456d6666666666666666666666
-ddd666666d66dd66d6d000006d55d6d06d6666655dd6d500005555000333b3bb3bb3bbbbccccccccdd3bbbbbbbb3bbbb544444456d6d6666dddddddddddddddd
-66dd6666d6dd66d6d50000005d66d6d05d55555d665d000005445000033b3bbb33bbbbbbcccccccccdd3bbbbbbbbbbbb544444455d5555555555555555555555
-666d66666ddd66d66d0000006d66d5006666d66ddd000000544500000333bb3b3bb3bbbbccccccccccdd3bbbbbbbb3b35444444566666d66dd5dd5ddd5dddddd
-666d6666dddddd6d6d0000005d5550006555ddd50000000044500000033333b3333b3bbbccccccccdccdd3bbbb3b3b335444444566d66d66ddddd5ddd5555d5d
-666d6666ddddd6d6d0000000d6d500006d6655000000000044000000000333333333b3b3ccccccccdcccdd3bb3b33333544444456666dd6666666d666d66d555
-66d66666dddd6d6d50000000d6d5000055dd000000000000450000000000033303333333cccccccccdcccdd3333333335444444555555d5555555d556d55d66d
-dd66666dddddddddd00000005d5000005500000000000000500000000000000000333333ccccccccccccccdd33333333544444456d66666d6d6666d655005555
-bb3333d635666666bbbbbbbb00011000000110000000000000000000000000000000000000000000eefe0000f00000000b3b0000004444002eeeef0022222ee0
-bbb3333d3566d666bbbbbbbb0001100000011111000111110000000000000333b300000000000000eeefe000ef00000033b3b0000000440022eeeef0e22eeee0
-bbbbb33535555555bbbbbbbb000110000001111100011111000ddddd00003b3bbb30000300000000ee2ef000eef00000d3333ddddddd44dd22e222efe2eeeeee
-bbbbb33d3d666d6dbbbbbbbb0001100000000000000110000006111103bbb3bb3b30033b00000000222eef00eef000001541111111114441eeee2eef22222220
-bbbbb33333dd6d66bbbbbbbb000110000000000000011000000666663b3b3b33b3303b3b0000000022eeef0022f000006666666666666666ffffeeef22222220
-bbbbbb33b3d66d66bbbbbbbb000110000000000000011000000ddddd33b3b503330033b3660000662eeeeef02eef0000d6dddddddd6dddd6eeeeffeeeeeeeee0
-bbbbbb33b3555d55bbbbbbbb000110000000000000011000000ddddd0333005050003350dd6000dd2eeeeef0feef0000dd6dddddddddddddeee2eefeeeeeeeee
-bbbbbb33b333d666bbbbbbbb000110000000000000011000000d6ddd0505044400000004dddd00ddee2222e0efef0000ddddddddddddd6ddee22eeefeeeeeeee
-eee22efe22eee22ee22eeeee22eeeeee000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-eee22eef22ee222ee22eee2222eeeeee000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-eeeeeeef22e222eee22ee22222eeeeee000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-22222222eee222eeeeee222eeeeeeeee000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-22222222fffe2e22ffffee2e22eeeeee000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-eeeeeeeeeeeffe222eeefffe22eeeeee000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-eeeeeeee2eeeefe22eeeeeef22eeeeee000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-eeeeeeee2eeeeefe2eeeee2eeeeeeeee000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+dd66666666666666d6d000006d66d5556d666d666d555555004400400000999a999a9aa9ccccccccd999af9a9a9a99aa494f49446d6666666666666666666666
+ddd666666d66dd66d6d000006d55d6d06d6666655dd6d500004444000999a9aa9aa9aaaaccccccccdd99faa9aaa9aaaa44ff49446d6d6666dddddddddddddddd
+66dd6666d6dd66d6d50000005d66d6d05d55555d665d000004444000099a9aaa99aaaaaacccccccccdd999afaaaaaaaa444f44945d5555555555555555555555
+666d66666ddd66d66d0000006d66d5006666d66ddd0000004f9400000999aa9a9aa9aaaaccccccccdddd99f9aaaaa9a944f4f49466666d66dd5dd5ddd5dddddd
+666d6666dddddd6d6d0000005d5550006555ddd50000000099400000099999a9999a9aaaccccccccccddd99faa9a9a9944f4f44466d66d66ddddd5ddd5555d5d
+666d6666ddddd6d6d0000000d6d500006d6655000000000094000000000999999999a9a9ccccccccccccdd99a9a9999949444f446666dd6666666d666d66d555
+66d66666dddd6d6d50000000d6d5000055dd000000000000440000000000099909999999ccccccccccddddd99999999949f44f9455555d5555555d556d55d66d
+dd66666dddddddddd00000005d5000005500000000000000400000000000000000999999cccccccccccccddd9999999944ff44946d66666d6d6666d655005555
+ff9f9dd9f56666669f9a9a9a00011000000110000000000000000000000000000000000000000000eefe0000f00000000b3b0000004444002eeeef0022222ee0
+9aa9dd9d9566d66699a9a9af0001100000011111000111110000000000000333b300000000000000eeefe000ef00000033b3b0000000440022eeeef0e22eeee0
+aafa9f55559555559f9a9af9000110000001111100011111000ddddd00003b3bbb30000300000000ee2ef000eef00000d3333ddddddd44dd22e222efe2eeeeee
+9f9af99d99666d6df99f9aaa0001100000000000000110000006111103bbb3bb3b30033b00000000222eef00eef000001541111111114441eeee2eef22222220
+a9afa9f9f9dd6d669af9a9fa000110000000000000011000000666663b3b3b33b3303b3b0000000022eeef0022f000006666666666666666ffffeeef22222220
+9af9aa999dd66d669f9af9af000110000000000000011000000ddddd33b3b503330033b3660000662eeeeef02eef0000d6dddddddd6dddd6eeeeffeeeeeeeee0
+af9af9f9f5595d55999f9af9000110000000000000011000000ddddd0333005050003350dd6000dd2eeeeef0feef0000dd6dddddddddddddeee2eefeeeeeeeee
+9aaf9a99a996d666f999af99000110000000000000011000000d6ddd0505044400000004dddd00ddee2222e0efef0000ddddddddddddd6ddee22eeefeeeeeeee
+eee22efe22eee22ee222eeee22ee22ee22ee22eecccccccccc11cc11cc11cc116666666655555555666000005775555544444444000000000000000000000000
+eee22eef22ee222ee22eee2222ee22ee22ee22ee11111111cc11cc11cc11cc1166666666aaaaaaaa66655d5d5555555544f44f44080008000800080008000800
+eeeeeeef22e222eee22ee22222ee22ee22ee22eecccccccccc11cc11cc11cc11ddddddddd5dd5dd56657557557755555444f4444008080000080800000808000
+22222222eee222eeeeee222eeeeeeeeeeeeeeeeecccccccccccccccccccccccc555555d55dd5d55d5555555d5555555544f44444000800000008000000080000
+22222222fffe2e22ffffee2e22ee22eeeeeeeeeecc11cc11cc11cc1111111111555d55555d5555d557755d55d775555544f4f444008080000080800000808000
+eeeeeeeeeeeffe222eeefffe22ee22eee2e2e2e2cc11cc11cc11cc11c1c1c1c15d55dd5d555d5555555555555d55555544444f44080008000800080008000800
+eeeeeeee2eeeefe22eeeeeef22ee22eee2e2e2e2cc11cc11cc11cc111c1c1c1cd5dd5dd55555555557755555d7755555444fff44000000000000000000000000
+eeeeeeee2eeeeefe2eeeee2eeeeeeeee22222222cccccccccccccccc11111111aaaaaaaa55555555555555555d55d55544f4f444000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800
-00000000000000000000000000808000008080000080800000808000008080000080800000808000008080000080800000808000008080000080800000808000
-00000000000000000000000000080000000800000008000000080000000800000008000000080000000800000008000000080000000800000008000000080000
-00000000000000000000000000808000008080000080800000808000008080000080800000808000008080000080800000808000008080000080800000808000
-00000000000000000000000008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800
+08000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800
+00808000008080000080800000808000008080000080800000808000008080000080800000808000008080000080800000808000008080000080800000808000
+00080000000800000008000000080000000800000008000000080000000800000008000000080000000800000008000000080000000800000008000000080000
+00808000008080000080800000808000008080000080800000808000008080000080800000808000008080000080800000808000008080000080800000808000
+08000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __gff__
