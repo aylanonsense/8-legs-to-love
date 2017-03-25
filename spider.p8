@@ -9,7 +9,9 @@ local next_scene
 local transition_frames_left=0
 local scene_frame
 local level_num
+local level
 local score
+local score_cumulative
 local bugs_eaten
 local timer
 local frames_until_spawn_bug
@@ -22,6 +24,10 @@ local web_strands
 local moving_platforms
 local tiles
 local level_spawn_points
+local wind_frames
+local wind_dir
+local wind_x
+local wind_y
 
 
 -- constants
@@ -30,36 +36,21 @@ local tile_flip_matrix={8,4,2,1,128,64,32,16}
 local scenes={}
 local levels={
 	-- spawn_x,spawn_y,tileset,tiles,hazard,has_bottom
-	-- {20,80,"carrot","m77n        vrqn 45  ... vtr 66n 45  qsu   vr67n 45qsu  ... o65n opp  ..... m45 i20l..++++.. 45 e000j.+**+...45 e003f.+**+...45 g000f.+**+...op e020f.+**+. k20je000f.+**+.i000fe003h.++++.e200hg200j......g003jcyyydaaaaaacyyydwwwwwwwwwwwwwwww",nil,true},
-	-- {64,64,"space","     b                ..*+a+.7daa c6.+++++*+..     .a......+**    *+..gefh..+*+  +*+.i8#8@j.+b.  ..+.k!8%$n.+.2  4.+.m9$(!l.+.. b..+.o@%)(p.+*+  +*+..qsur..++   ...b.....a+*+ a w-y.++++++*+    ][-.+***...    a1{0..+++.7da b      a          ","space",true},
-	{12,36,"bridge",
-"stst        msts"..
-"tstn ........ ui"..
-" umsl.+*+*...kv "..
-"kui...*+*+.ktstl"..
-" u .+.++++...jv "..
-" v .......... u "..
-"yyyyyyy10zzzzzzz"..
-"wwwwweg..hfxxxxx"..
-"wwweg......hfxxx"..
-"4wc...+**+...dx5"..
-"2wa.+++**+++.bx3"..
-"64..++++++++..57"..
-"62............37"..
-"6rooooooooooooq7"..
-"rooooooooooooooq","river"},
-	-- {30,50,"construction","  uw        c     uw        i    .uw.     ..g..  .uw...+*.+.... qmoqs.    .      .uw..*+..*+...  .uw.+..*+..*+. +.uw..+*..*+.+. ..yw.+..*+..*.. +.uw..*+.*..*+. +.uw.+.*+.*+.+. ..uw...+....+.. qqmos.    .       uw   ..   ..  aauwbbaabbaa aab","platforms"},
+	-- {20,75,"garden","m##n        vrqn !@      vtr #$n !@  qsu   vr#$n !@qsu  . . o#@n opp  . .+. m!@ i86l .+.*.+. !@ e666j .+*+ ..!@ e669f.+*..+. !@ g666f..+*+. .!@ e686f.+.*+.. op e666f +*+.. w%^xe669h.+.+. y-(((g866j . .. 0((((c544daaaaaac44542233222222322323",nil,true},
+	-- {27,51,"bridge","wxwx        mwxwxwxn          yi ymwl. .   .okz kyi  .*+*+.kxwxl y .+.+.++.. jz  z  . .. .    y 444424476555555300000eg..hf11111000eg. . ..hf111!0c ..+**+. .d1@80a.+++*+*++ b19#!  +++.++.+  @$#8   . . ..   9$#vssssssssssqsu$vssssssssssssssu","river"},
+	-- {30,35,"construction","  0y     c    wy  wy     k    wy  wy     i    wy  wy   +...+  wyssoqsu.+*+*+.mso  wy...+.+*+..wy  wy.+++*+.++.wy  wy.+*.*++*+.wy  wy.+*.**.*+.0y  wy.+.*+.**+.wy  wy.++*+**++.wyg wy..+++++...wyoqssu  ...  msoq  wy          wyaawybbaabbaa awy","platforms"},
+	-- {64,20,"space"," b   b a 8   a  b  a 6 +..a78  b @da..b*++.a.6    .++.a..b.+. 9 a +*b.gefh..* a   *+.i#(#^j...  9 ++bk%#-)n.2  a  .a.m$)[%l.b.   a.4.o^-][p.+*b   +. .qsura..  b b .a. ..b.+.6  a w{y.+*++*+  a   ;:{ b+.+ a      1<0   a bc!  ba a   b         ","space",true},
+	{97,72,"city","                          e            gkkikkkm    . +. . o     c. .*+.++.oawwu %u.+*+.*+.qww(u %u ++*.++ s(((u %u..+.**+.s(((u %%u .*+*+ s((-u %%u.+**+..s([-u %%u ++.*+.s(768 %%u. .+*+.s(@!# %%zy0.+*. s(@!# %%324.+...s(@!# %%324   768(@!# ","wind"},
 	{21,45,"cave","rssqvsqarqvssupaaqqaql  kprssvn  kl kh. ih kqql  mn.if..gf.ijkl  kl.gh..ef.ghmn  in.gf..cd.gfkl  ml.ef..  .efml  kn.ef.+...cdkj  il.ef.+++.  ih  gj.cd.+*++..gf  gh.  .+**++.ef  gh....+***+.cd  cd.++++++++.        .....                      ",nil},
-	{50,50,"city","xw              54q.            32o...          10y.+*..        666.+*+*...   m 666.+*ef*++..!!!666f+*acf*efe###666aefa*a+acd###666cdcd+aed+.###666.++*+cd++.###666.++.....+.###666....ikj...###888..gsutvh..%%%((([](((((([](((---{}------{}---",nil,true},
 }
 local tilesets={
 	-- base_sprite,{solid_bits}
-	city={211,{0,0, 0,0, 0,0, 224,238, 232,255, 177,255, 0,185, 115,247, 17,51}},
-	carrot={128,{240,255, 254,255, 204,204, 204,136, 200,204, 236,255, 204,204, 255,239, 232,254, 255,63, 127,1}},
-	construction={145,{0,0, 0,0, 0,255}},
+	city={148,{0,200, 119,119, 238,238, 247,255, 254,255, 240,255, 112,255, 238,238, 238,238, 204,204, 51,51}},
+	garden={172,{240,255, 254,255, 204,204, 204,136, 200,204, 236,255, 204,204, 255,255, 232,254, 255,63, 127,1, 200,254, 200,204, 204,204}},
+	construction={195,{0,0, 0,0, 0,255, 0,255}},
 	cave={158,{255,9, 136,136, 136,136, 204,136, 238,204, 255,239, 254,255}},
-	space={169,{0,0, 0,0, 252,255, 128,254, 200,236, 238,238, 238,238, 206,140, 239,8, 255,207, 255,63, 200,254, 49,247, 127,19, 247,127, 255,102 }},
-	bridge={194,{19,17, 127,51, 255,63, 63,0, 127,19, 238,142, 255,255, 0,0, 206,8}}
+	space={209,{0,0, 0,0, 252,255, 128,254, 200,236, 238,238, 238,238, 206,140, 239,8, 255,207, 255,63, 200,254, 49,247, 127,19, 247,127, 255,102, 238,63}},
+	bridge={236,{19,17, 127,51, 255,63, 63,0, 127,19, 238,142, 255,255, 0,240, 0,0, 0,0, 206,8}}
 }
 local bug_species={
 	-- species_name,base_sprite,colors,points,wiggles
@@ -71,6 +62,8 @@ local bug_species={
 }
 local entity_classes={
 	spider={
+		vx_strands=0,
+		vy_strands=0,
 		render_layer=7,
 		mass=4,
 		webbing=70,
@@ -78,6 +71,7 @@ local entity_classes={
 		facing_x=0,
 		facing_y=1,
 		length_of_spun_web=0,
+		walk_counter=0,
 		-- is_on_tile=false,
 		-- is_on_web=false,
 		-- is_in_freefall=false,
@@ -85,156 +79,181 @@ local entity_classes={
 		-- is_placing_web=false,
 		-- spun_strand=nil,
 		-- moving_platform=nil,
+		frames_of_tile_grace=0,
 		frames_until_spin_web=0,
 		web_uncollision_frames=0,
 		hitstun_frames=0,
-		update=function(entity)
+		update=function(self)
 			-- decrement counters
-			decrement_counter_prop(entity,"web_uncollision_frames")
-			decrement_counter_prop(entity,"hitstun_frames")
+			decrement_counter_prop(self,"web_uncollision_frames")
+			decrement_counter_prop(self,"hitstun_frames")
+			decrement_counter_prop(self,"frames_of_tile_grace")
+			decrement_counter_prop(self,"walk_counter")
 			-- figure out if the spider is supported by anything
-			local web_x,web_y,web_square_dist=calc_closest_spot_on_web(entity.x,entity.y,false)
-			entity.is_on_web=web_x!=nil and web_square_dist<=9 and entity.web_uncollision_frames<=0 and entity.hitstun_frames<=0
-			entity.is_on_tile=is_solid_tile_at(entity.x,entity.y) and entity.hitstun_frames<=0
-			entity.moving_platform=entity.hitstun_frames<=0 and get_moving_platform_at(entity.x,entity.y) or nil
-			entity.is_in_freefall=not entity.moving_platform and not entity.is_on_tile and not entity.is_on_web
+			local web_x,web_y,web_square_dist=calc_closest_spot_on_web(self.x,self.y,false)
+			local was_in_freefall=self.is_in_freefall
+			self.is_on_web=web_x!=nil and web_square_dist<=9 and self.web_uncollision_frames<=0 and self.hitstun_frames<=0
+			self.is_on_tile=is_solid_tile_at(self.x,self.y) and self.hitstun_frames<=0
+			self.moving_platform=self.hitstun_frames<=0 and get_moving_platform_at(self.x,self.y) or nil
+			self.is_in_freefall=not self.moving_platform and not self.is_on_tile and not self.is_on_web
+			if self.is_on_tile then
+				self.frames_of_tile_grace=8
+			end
 			-- when on web, the spider is pulled towards the strands
-			if entity.is_on_web and not entity.is_on_tile then
-				entity.x+=(web_x-entity.x)/5
-				entity.y+=(web_y-entity.y)/5
-			elseif entity.is_on_tile then
-				entity.respawn_x,entity.respawn_y=entity.x,entity.y
+			if self.is_on_web and not self.is_on_tile then
+				self.x+=(web_x-self.x)/5
+				self.y+=(web_y-self.y)/5
+			elseif self.is_on_tile then
+				self.respawn_x,self.respawn_y=self.x,self.y
 			end
 			-- the spider falls if unsupported
-			if entity.is_in_freefall then
-				apply_gravity(entity,0.05,0.019)
+			if self.is_in_freefall then
+				apply_gravity(self,0.05,0.019,0.01)
 			-- move the spider
 			else
-				if entity.moving_platform then
-					entity.x+=entity.moving_platform.vx
-					entity.y+=entity.moving_platform.vy
+				if self.moving_platform then
+					self.x+=self.moving_platform.vx
+					self.y+=self.moving_platform.vy
 				end
-				entity.vx=(btn(1) and 1 or 0)-(btn(0) and 1 or 0)
-				entity.vy=(btn(3) and 1 or 0)-(btn(2) and 1 or 0)
+				self.vx,self.vy=(btn(1) and 1 or 0)-(btn(0) and 1 or 0),(btn(3) and 1 or 0)-(btn(2) and 1 or 0)
 				-- make sure the spider doesn't move faster when moving diagonally
-				if entity.vx!=0 and entity.vy!=0 then
-					entity.vx*=0.7
-					entity.vy*=0.7
+				if self.vx!=0 and self.vy!=0 then
+					self.vx*=0.7
+					self.vy*=0.7
 				end
+			end
+			-- apply web_strand velocity
+			if self.is_in_freefall then
+				local mag=self.vx_strands*self.vx_strands+self.vy_strands*self.vy_strands
+				self.vx+=self.vx_strands*mid(0,200*mag,1)
+				self.vy+=self.vy_strands*mid(0,200*mag,1)
 			end
 			-- the spider stays under the speed limit
-			entity.vx=mid(-2,entity.vx,2)
-			entity.vy=mid(-2,entity.vy,2)
+			self.vx,self.vy,self.vx_strands,self.vy_strands=mid(-2,self.vx,2),mid(-2,self.vy,2),0,0
 			-- apply the spider's velocity
-			entity.x+=entity.vx
-			entity.y+=entity.vy
+			self.x+=self.vx
+			self.y+=self.vy
 			-- keep track of which direction the spider is facing
-			local speed=sqrt(entity.vx*entity.vx+entity.vy*entity.vy)
-			if entity.vx!=0 or entity.vy!=0 then
-				entity.facing_x=entity.vx/speed
-				entity.facing_y=entity.vy/speed
+			local speed=sqrt(self.vx*self.vx+self.vy*self.vy)
+			if self.vx!=0 or self.vy!=0 then
+				self.facing_x,self.facing_y=self.vx/speed,self.vy/speed
 			end
 			-- the spider stops spinning web if it gets cut off at the base
-			decrement_counter_prop(entity,"frames_until_spin_web")
-			if (entity.is_spinning_web or entity.is_placing_web) and not entity.spun_strand.is_alive then
-				entity.is_spinning_web,entity.is_placing_web,entity.spun_strand=false -- ,false,nil
-				entity.finish_spinning_web(entity)
+			decrement_counter_prop(self,"frames_until_spin_web")
+			if (self.is_spinning_web or self.is_placing_web) and not self.spun_strand.is_alive then
+				self.is_spinning_web,self.is_placing_web,self.spun_strand=false -- ,false,nil
+				self:finish_spinning_web()
 			end
 			-- the spider places a spun web when z is pressed
-			if entity.is_placing_web and btnp(4) then
-				local web_point=entity.spin_web_point(entity,true,false,true)
-				entity.spun_strand.from=web_point
-				entity.is_placing_web,entity.spun_strand=false -- ,nil
+			if self.is_placing_web and btnp(4) then
+				local web_point=self:spin_web_point(true,false,true)
+				self.spun_strand.from,self.is_placing_web,self.spun_strand=web_point -- ,false,nil
 				if web_point.is_in_freefall and not web_point.has_been_anchored and speed>0.8 then
-					entity.web_uncollision_frames=4
+					self.web_uncollision_frames=4
 				end
-				entity.finish_spinning_web(entity)
+				self:finish_spinning_web()
 			-- the spider starts spinning web when z is pressed
-			elseif not entity.is_spinning_web and btnp(4) and entity.webbing>0 then
-				entity.is_spinning_web,entity.frames_until_spin_web,entity.length_of_spun_web=true,0,0
-				local web_point=entity.spin_web_point(entity,true,true,false)
-				entity.spun_strand=create_entity("web_strand",{from=entity,to=web_point})
+			elseif not self.is_spinning_web and btnp(4) and self.webbing>0 then
+				self.is_spinning_web,self.frames_until_spin_web,self.length_of_spun_web=true,0,0
+				local web_point=self:spin_web_point(true,true,false)
+				self.spun_strand=create_entity("web_strand",{from=self,to=web_point})
 				create_entity("web_length_hint",{
-					x=entity.x,
-					y=entity.y,
+					x=self.x,
+					y=self.y,
 					web_point=web_point
 				})
+				-- play spinning sound
+				sfx(3,1)
 			-- the spider stops spinning web when z is no longer held or it's been spinning for too long
-			elseif entity.is_spinning_web and not btn(4) then
-				entity.is_placing_web,entity.is_spinning_web=true -- ,false
+			elseif self.is_spinning_web and not btn(4) then
+				self.is_placing_web,self.is_spinning_web=true -- ,false
+				-- stop spinning sound
+				sfx(-1,1)
 			end
 			-- the spider continuously creates web while z is held
-			if entity.is_spinning_web and entity.frames_until_spin_web<=0 and entity.webbing>0 and entity.length_of_spun_web<25 then
-				local web_point=entity.spin_web_point(entity,false,true,false)
-				entity.length_of_spun_web+=1
-				entity.spun_strand.from=web_point
-				entity.frames_until_spin_web,entity.spun_strand=5,create_entity("web_strand",{from=entity,to=web_point})
-				decrement_counter_prop(entity,"webbing")
+			if self.is_spinning_web and self.frames_until_spin_web<=0 and self.webbing>0 and self.length_of_spun_web<25 then
+				local web_point=self:spin_web_point(false,true,false)
+				self.length_of_spun_web+=1
+				self.spun_strand.from=web_point
+				self.frames_until_spin_web,self.spun_strand=5,create_entity("web_strand",{from=self,to=web_point})
+				decrement_counter_prop(self,"webbing")
 			end
 			-- the spider stays in bounds
-			entity.x=mid(3,entity.x,124)
+			self.x=mid(4,self.x,123)
 			-- the spider can fall off the bottom of bottomless levels
-			if levels[level_num][5]=="river" then
-				if entity.y>110 and not entity.is_on_tile then
-					create_entity("splash",extract_props(entity,{"x","y"}))
-					entity.die(entity)
-				end
-			elseif not levels[level_num][6] then
-				entity.y=max(2,entity.y)
-				if entity.y>=130 then
-					entity.die(entity)
+			if level[5]=="river" then
+				if self.y>110 and not self.is_on_tile then
+					create_entity("splash",extract_props(self,{"x","y"}))
+					self:die()
 				end
 			else
-				entity.y=mid(2,entity.y,116)
+				self.y=(self.is_on_tile or level[6]) and mid(2,self.y,116) or max(2,self.y)
+				if self.y>=130 then
+					self:die()
+				end
+			end
+			-- play a walking sound effect
+			if self.walk_counter<=0 and not self.is_in_freefall and (self.vx!=0 or self.vy!=0) then
+				self.walk_counter=7
+				sfx((self.is_spinning_web or self.is_placing_web) and 1 or 0,0)
+			end
+			-- play a jumping sound effect
+			if self.is_in_freefall and not was_in_freefall then
+				sfx(2,0)
 			end
 		end,
-		draw=function(entity)
+		draw=function(self)
 			local sprite,dx,dy,flipped_x,flipped_y=29,3.5,3.5
-			if entity.facing_x<-0.4 then
+			if self.facing_x<-0.4 then
 				flipped_x,dx=true,2.5
-			elseif entity.facing_x<0.4 then
+			elseif self.facing_x<0.4 then
 				sprite=13
 			end
-			if entity.facing_y<-0.4 then
+			if self.facing_y<-0.4 then
 				flipped_y,dy=true,2.5
-			elseif entity.facing_y<0.4 then
+			elseif self.facing_y<0.4 then
 				sprite=45
 			end
 			-- flip through the walk cycle
-			if not entity.is_in_freefall and (entity.vx!=0 or entity.vy!=0) then
+			if not self.is_in_freefall and (self.vx!=0 or self.vy!=0) then
 				sprite+=1+flr(scene_frame%10/5)
 			end
 			if spider.hitstun_frames%4<2 then
-				spr(sprite,entity.x-dx,entity.y-dy,1,1,flipped_x,flipped_y)
+				spr(sprite,self.x-dx,self.y-dy,1,1,flipped_x,flipped_y)
 			end
 		end,
-		on_death=function(entity)
-			entity.finish_spinning_web(entity)
-			create_entity("spider_respawn",extract_props(entity,{"x","y","respawn_x","respawn_y"}))
+		on_death=function(self)
+			self:finish_spinning_web()
+			create_entity("spider_respawn",extract_props(self,{"x","y","respawn_x","respawn_y"}))
 		end,
-		spin_web_point=function(entity,can_be_fixed,is_being_spun,prefer_tile)
-			local moving_platform=get_moving_platform_at(entity.x,entity.y)
-			local is_fixed=can_be_fixed and (moving_platform or is_solid_tile_at(entity.x,entity.y))
+		spin_web_point=function(self,can_be_fixed,is_being_spun,prefer_tile)
+			local x,y=self.x,self.y
+			local moving_platform=get_moving_platform_at(x,y)
+			local is_fixed=can_be_fixed and (moving_platform or is_solid_tile_at(x,y))
 			-- search for an existing web point
 			if can_be_fixed and not (is_fixed and prefer_tile) then
-				local web_point,square_dist=calc_closest_web_point(entity.x,entity.y,true,true)
+				local web_point,square_dist=calc_closest_web_point(x,y,true,true)
 				if square_dist<81 then
 					return web_point
 				end
 			end
+			-- there is a grace period where you can still spin web points onto tile
+			if not is_fixed and can_be_fixed and self.frames_of_tile_grace>0 then
+				is_fixed,x,y=true,self.respawn_x,self.respawn_y
+			end
 			-- otherwise just create a new one
 			return create_entity("web_point",{
-				x=entity.x,
-				y=entity.y,
-				vx=entity.vx-entity.facing_x,
-				vy=entity.vy-entity.facing_y,
+				x=x,
+				y=y,
+				vx=self.vx-self.facing_x,
+				vy=self.vy-self.facing_y,
 				has_been_anchored=is_fixed,
 				is_being_spun=is_being_spun,
 				is_in_freefall=not is_fixed,
 				moving_platform=moving_platform
 			})
 		end,
-		finish_spinning_web=function(entity)
+		finish_spinning_web=function(self)
 			foreach(web_points,function(web_point)
 				web_point.is_being_spun=false
 			end)
@@ -243,85 +262,90 @@ local entity_classes={
 	web_length_hint={
 		render_layer=8,
 		radius=5,
-		update=function(entity)
-			if entity.web_point then
-				entity.x=entity.web_point.x
-				entity.y=entity.web_point.y
+		update=function(self)
+			if self.web_point then
+				self.x,self.y=self.web_point.x,self.web_point.y
 			end
 			if spider and spider.is_spinning_web and spider.webbing>0 and spider.length_of_spun_web<25 then
-				entity.radius+=mid(30/entity.radius, 1.5, 3)
+				self.radius+=1.5
 			end
-			if entity.frames_to_death<=0 and (not spider or not spider.is_alive or not (spider.is_placing_web or spider.is_spinning_web)) then
-				entity.frames_to_death=3
+			if self.frames_to_death<=0 and (not self.web_point.is_alive or not spider or not spider.is_alive or not (spider.is_placing_web or spider.is_spinning_web)) then
+				self.frames_to_death=3
 			end
 		end,
-		draw=function(entity)
-			local x,y,f,a,s=entity.x,entity.y,entity.frames_to_death
-			if entity.radius<15 then
+		draw=function(self)
+			local x,y,f,a,s=self.x,self.y,self.frames_to_death -- ,nil,nil
+			if self.radius<15 then
 				s=20
-			elseif entity.radius<30 then
+			elseif self.radius<30 then
 				s=12
 			else
 				s=8
 			end
 			for a=0,360,s do
-				pset(x+entity.radius*cos((a+entity.frames_alive)/360),y+entity.radius*sin((a+entity.frames_alive)/360),7)
+				pset(x+self.radius*cos((a+self.frames_alive)/360),y+self.radius*sin((a+self.frames_alive)/360),7)
 			end
 		end
 	},
 	spider_respawn={
 		frames_to_death=60,
-		update=function(entity)
-			entity.x+=(entity.respawn_x-entity.x)/entity.frames_to_death
-			entity.y+=(entity.respawn_y-entity.y)/entity.frames_to_death
+		update=function(self)
+			self.x+=(self.respawn_x-self.x)/self.frames_to_death
+			self.y+=(self.respawn_y-self.y)/self.frames_to_death
 		end,
-		draw=function(entity)
-			local x,y,f=entity.x,entity.y,entity.frames_to_death
+		draw=function(self)
+			local x,y,f=self.x,self.y,self.frames_to_death
 			local r=(1100-(f-30)*(f-30))/100
 			local s,c=r*sin(f/40),r*cos(f/40)
-			color(7+entity.frames_to_death/4%6)
+			color(7+self.frames_to_death/4%6)
 			circ(x+s,y+c,1)
 			circ(x-s,y-c,1)
 			circ(x-c,y+s,1)
 			circ(x+c,y-s,1)
 		end,
-		on_death=function(entity)
-			spider=create_entity("spider",extract_props(entity,{"x","y","respawn_x","respawn_y"}))
+		on_death=function(self)
+			spider=create_entity("spider",extract_props(self,{"x","y","respawn_x","respawn_y"}))
 		end
 	},
 	web_point={
+		vx_strands=0,
+		vy_strands=0,
 		mass=1,
 		-- is_soaked=false,
 		-- has_strands_attached=false,
 		-- caught_bug=nil,
 		-- moving_platform=nil,
-		add_to_game=function(entity)
-			add(web_points,entity)
+		add_to_game=function(self)
+			add(web_points,self)
 		end,
-		update=function(entity)
-			if entity.is_in_freefall then
-				if levels[level_num][5]=="river" and entity.y>=110 then
-					entity.mass=2.5
-				else
-					entity.mass=1
+		update=function(self)
+			if self.is_in_freefall then
+				self.mass=1
+				if level[5]=="river" and self.y>=110 then
+					self.mass=2.5
 				end
-				apply_gravity(entity,0.02,0.02)
-				entity.vx,entity.vy=0.9*mid(-3,entity.vx,3),0.9*mid(-3,entity.vy,3)
-				entity.x+=entity.vx
-				entity.y+=entity.vy
-			elseif entity.moving_platform then
-				entity.x+=entity.moving_platform.vx
-				entity.y+=entity.moving_platform.vy
+				apply_gravity(self,0.02,0.02,0.01)
+				-- apply web_strand velocity
+				self.vx+=self.vx_strands
+				self.vy+=self.vy_strands
+				self.vx_strands,self.vy_strands=0,0
+				-- apply velocity
+				self.vx,self.vy=0.9*mid(-3,self.vx,3),0.9*mid(-3,self.vy,3)
+				self.x+=self.vx
+				self.y+=self.vy
+			elseif self.moving_platform then
+				self.x+=self.moving_platform.vx
+				self.y+=self.moving_platform.vy
 			end
-			if entity.x<-20 or entity.x>147 or entity.y<-20 or entity.y>180 then
-				entity.die(entity)
+			if self.x<-20 or self.x>147 or self.y<-20 or self.y>180 then
+				self:die()
 			end
 			-- we use a silly solution to count strand connections
 			-- a point without any strands shouldn't exist
-			if entity.frames_alive>1 and not entity.has_strands_attached then
-				entity.die(entity)
+			if self.frames_alive>1 and not self.has_strands_attached then
+				self:die()
 			end
-			entity.has_strands_attached=false
+			self.has_strands_attached=false
 		end
 	},
 	web_strand={
@@ -332,69 +356,67 @@ local entity_classes={
 		-- elasticity=1.65,
 		-- base_length=5,
 		-- break_length=25,
-		add_to_game=function(entity)
-			add(web_strands,entity)
+		add_to_game=function(self)
+			add(web_strands,self)
 		end,
-		update=function(entity)
-			local from,to=entity.from,entity.to
+		update=function(self)
+			local from,to=self.from,self.to
 			-- count points attached to the strand
-			from.has_strands_attached=true
-			to.has_strands_attached=true
+			from.has_strands_attached,to.has_strands_attached=true,true
 			-- strands transfer anchored status
 			if from.class_name=="web_point" and to.class_name=="web_point" and not from.is_being_spun and not to.is_being_spun and (from.has_been_anchored or to.has_been_anchored) then
-				from.has_been_anchored=true
-				to.has_been_anchored=true
+				from.has_been_anchored,to.has_been_anchored=true,true
 			end
 			-- find the current length of the strand
 			local dx,dy=to.x-from.x,to.y-from.y
 			local len=sqrt(dx*dx+dy*dy)
 			-- if the strand stretches too far, it loses elasticity
 			local percent_elasticity=mid(0,(25-len)/11.75,1)
-			if percent_elasticity<entity.percent_elasticity_remaining then
-				entity.percent_elasticity_remaining,entity.stretched_length=percent_elasticity,len/(1+1.65*percent_elasticity)
+			if percent_elasticity<self.percent_elasticity_remaining then
+				self.percent_elasticity_remaining,self.stretched_length=percent_elasticity,len/(1+1.65*percent_elasticity)
 			end
 			-- bring the two points closer to each other
-			if len>entity.stretched_length and entity.percent_elasticity_remaining>0 then
-				local f=(len-entity.stretched_length)/4
+			if len>self.stretched_length and self.percent_elasticity_remaining>0 then
+				local f=(len-self.stretched_length)/4
 				local from_mult,to_mult=f*to.mass/from.mass/len,f*from.mass/to.mass/len
 				if from.is_in_freefall then
-					from.vx+=mid(-2,from_mult*dx,2)
-					from.vy+=mid(-2,from_mult*dy,2)
+					from.vx_strands+=mid(-2,from_mult*dx,2)
+					from.vy_strands+=mid(-2,from_mult*dy,2)
 				end
 				if to.is_in_freefall then
-					to.vx-=mid(-2,to_mult*dx,2)
-					to.vy-=mid(-2,to_mult*dy,2)
+					to.vx_strands-=mid(-2,to_mult*dx,2)
+					to.vy_strands-=mid(-2,to_mult*dy,2)
 				end
 			end
 			-- die if the strand gets too long or if the points die
 			if len>=25 or not from.is_alive or not to.is_alive then
-				entity.die(entity)
+				self:die()
 			end
 		end,
-		draw=function(entity)
-			color(({8,8,9,15,7})[ceil(1+4*entity.percent_elasticity_remaining)])
-			if levels[level_num][5]=="river" then
-				if entity.from.y>=115 and entity.to.y>=115 then
+		draw=function(self)
+			color(({8,8,9,15,7})[ceil(1+4*self.percent_elasticity_remaining)])
+			if level[5]=="river" then
+				if self.from.y>=115 and self.to.y>=115 then
 					color(13)
-				elseif entity.from.y>=110 and entity.to.y>=110 then
+				elseif self.from.y>=110 and self.to.y>=110 then
 					color(6)
 				end
 			end
-			line(entity.from.x,entity.from.y,entity.to.x,entity.to.y)
+			line(self.from.x,self.from.y,self.to.x,self.to.y)
 		end
 	},
 	bug_spawn_flash={
 		render_layer=1,
 		frames_to_death=15,
-		draw=function(entity)
-			if entity.frames_to_death<=15 then
-				colorwash(bug_species[entity.species][3][1])
-				spr(92-ceil(entity.frames_to_death/3),entity.x-3,entity.y-4)
+		draw=function(self)
+			if self.frames_to_death<=15 then
+				colorwash(bug_species[self.species][3][1])
+				spr(92-ceil(self.frames_to_death/3),self.x-3,self.y-4)
 				pal()
 			end
 		end,
-		on_death=function(entity)
-			create_entity("bug",extract_props(entity,{"species","x","y"}))
+		on_death=function(self)
+			create_entity("bug",extract_props(self,{"species","x","y"}))
 		end
 	},
 	bug={
@@ -403,155 +425,154 @@ local entity_classes={
 		-- caught_web_point=nil,
 		frames_until_escape=0,
 		vy=0.35,
-		init=function(entity)
+		init=function(self)
 			local k,v
 			for k,v in pairs({"species_name","base_sprite","colors","points","wiggles"}) do
-				entity[v]=bug_species[entity.species][k]
+				self[v]=bug_species[self.species][k]
 			end
-			create_entity("spawn_ring",{target=entity})
+			create_entity("spawn_ring",{target=self})
 		end,
-		update=function(entity)
+		update=function(self)
 			-- bugs move downwards while spawning
-			if entity.frames_alive<45 then
-				entity.vy*=0.95
+			if self.frames_alive<45 then
+				self.vy*=0.95
 			-- bugs become catchable after spawning
-			elseif entity.frames_alive==45 then
-				entity.render_layer,entity.is_catchable,entity.vy=5,true,0
+			elseif self.frames_alive==45 then
+				self.render_layer,self.is_catchable,self.vy=5,true,0
 			-- bugs escape after a pause
-			elseif entity.frames_alive>80 and entity.is_catchable then
-				entity.escape(entity)
+			elseif self.frames_alive>80 and self.is_catchable then
+				self:escape()
 			end
 			-- bugs can be caught in webs
-			local species_name=entity.species_name
-			local web_point,square_dist=calc_closest_web_point(entity.x,entity.y,true) -- could be costly to always do
-			if entity.is_catchable and web_point and square_dist<64 then
-				entity.frames_until_escape,entity.caught_web_point,web_point.caught_bug,entity.is_catchable=135,web_point,entity
+			local species_name=self.species_name
+			local web_point,square_dist=calc_closest_web_point(self.x,self.y,true) -- could be costly to always do
+			if self.is_catchable and web_point and square_dist<64 then
+				self.frames_until_escape,self.caught_web_point,web_point.caught_bug,self.is_catchable=135,web_point,self
 				if species_name=="firefly" then
-					entity.frames_until_escape=140
+					self.frames_until_escape=140
 				elseif species_name=="dragonfly" then
-					entity.frames_until_escape*=2
+					self.frames_until_escape*=2
 				end
 			end
 			-- bugs escape webs in time or if they break
-			if entity.frames_until_escape>0 and entity.caught_web_point then
-				decrement_counter_prop(entity,"frames_until_escape")
-				if entity.frames_until_escape<=0 then
+			if self.frames_until_escape>0 and self.caught_web_point then
+				if decrement_counter_prop(self,"frames_until_escape") then
 					-- fireflies explode, actually
 					if species_name=="firefly" then
-						create_entity("firefly_explosion",extract_props(entity,{"x","y"}))
+						create_entity("firefly_explosion",extract_props(self,{"x","y"}))
 						foreach(web_points,function(web_point)
-							local dist=sqrt(calc_square_dist(entity.x,entity.y,web_point.x,web_point.y))
+							local dist=sqrt(calc_square_dist(self.x,self.y,web_point.x,web_point.y))
 							if dist<10 then
 								web_point.die(web_point)
 							elseif dist<30 then
-								local x,y=create_vector(web_point.x-entity.x,web_point.y-entity.y,(30-dist)/8)
+								local x,y=create_vector(web_point.x-self.x,web_point.y-self.y,(30-dist)/8)
 								web_point.vx+=x
 								web_point.vy+=y
 							end
 						end)
 						if spider and spider.is_alive then
-							if calc_square_dist(entity.x,entity.y,spider.x,spider.y)<625 then
-								spider.vx,spider.vy=create_vector(spider.x-entity.x,spider.y-entity.y,1.5)
+							if calc_square_dist(self.x,self.y,spider.x,spider.y)<625 then
+								spider.vx,spider.vy=create_vector(spider.x-self.x,spider.y-self.y,1.5)
 								spider.hitstun_frames=25
 							end
 						end
-						entity.die(entity)
+						self:die()
 					else
-						entity.escape(entity)
+						self:escape()
 					end
 				-- dragonflies shoot projectiles
-				elseif entity.frames_until_escape%80==0 and species_name=="dragonfly" then
-					create_entity("dragonfly_fireball_spawn",{bug=entity})
+				elseif self.frames_until_escape%80==0 and species_name=="dragonfly" then
+					create_entity("dragonfly_fireball_spawn",{bug=self})
 				end
 			end
 			-- move the bug
-			if entity.caught_web_point then
-				entity.x,entity.y=entity.caught_web_point.x,entity.caught_web_point.y
+			if self.caught_web_point then
+				self.x,self.y=self.caught_web_point.x,self.caught_web_point.y
 				-- wiggle the web point too
-				if entity.wiggles and entity.frames_until_escape%4==0 then
-					entity.caught_web_point.vx+=rnd(1)-0.5
-					entity.caught_web_point.vy+=rnd(1)-0.5
+				if self.wiggles and self.frames_until_escape%4==0 then
+					self.caught_web_point.vx+=rnd(1)-0.5
+					self.caught_web_point.vy+=rnd(1)-0.5
 				end
-				if not entity.caught_web_point.is_alive then
-					entity.escape(entity)
+				if not self.caught_web_point.is_alive then
+					self:escape()
 				end
 			else
-				entity.x+=entity.vx
-				entity.y+=entity.vy
+				self.x+=self.vx
+				self.y+=self.vy
 			end
 			-- bugs can be eaten by the spider
-			if spider and spider.is_alive and 49>calc_square_dist(spider.x,spider.y,entity.x,entity.y) then
-				if species_name=="hornet" and entity.is_catchable then
+			if spider and spider.is_alive and 49>calc_square_dist(spider.x,spider.y,self.x,self.y) then
+				if species_name=="hornet" and self.is_catchable then
 					if spider.hitstun_frames<=0 then
 						spider.hitstun_frames,spider.vy=25,1.5
 						spider.vx*=0.5
 					end
-				elseif entity.is_catchable or entity.caught_web_point then
-					local props=extract_props(entity,{"colors","x","y"})
-					props.text="+"..entity.points.."0"
+				elseif self.is_catchable or self.caught_web_point then
+					local props=extract_props(self,{"colors","x","y"})
+					props.text="+"..self.points.."0"
 					create_entity("floating_points",props)
-					score+=entity.points
+					score+=self.points
 					bugs_eaten+=1
 					spider.webbing=min(spider.webbing+1,spider.max_webbing)
-					entity.die(entity)
+					self:die()
 				end
 			end
 		end,
-		draw=function(entity)
+		draw=function(self)
 			-- draw tri rings
-			if entity.species_name=="hornet" and entity.is_catchable and not entity.caught_web_point then
-				local f,i=entity.frames_alive/50
+			if self.species_name=="hornet" and self.is_catchable and not self.caught_web_point then
+				local f,i=self.frames_alive/50
 				for i=1,5 do
-					line(entity.x+7*cos(f+i/3),entity.y+7*sin(f+i/3),entity.x+7*cos(f+(i+1)/3),entity.y+7*sin(f+(i+1)/3),8)
+					line(self.x+7*cos(f+i/3),self.y+7*sin(f+i/3),self.x+7*cos(f+(i+1)/3),self.y+7*sin(f+(i+1)/3),8)
 				end
 			end
 			-- draw the actual bug
-			local sprite=entity.base_sprite
-			if entity.caught_web_point then
-				sprite+=4+flr(entity.frames_alive/5)%3
-				if entity.species_name=="firefly" and entity.frames_until_escape<105 and entity.frames_until_escape%35>25 then
+			local sprite=self.base_sprite
+			if self.caught_web_point then
+				sprite+=4+flr(self.frames_alive/5)%3
+				if self.species_name=="firefly" and self.frames_until_escape<105 and self.frames_until_escape%35>25 then
 					colorwash(8)
 				end
 			else
-				if entity.frames_alive%6<3 then
+				if self.frames_alive%6<3 then
 					sprite+=1
 				end
-				if entity.is_catchable then
+				if self.is_catchable then
 					sprite+=2
 				end
-				if entity.frames_to_death>0 then
+				if self.frames_to_death>0 then
 					sprite+=2
-					colorwash(entity.colors[4-flr(entity.frames_to_death/4)])
+					colorwash(self.colors[4-flr(self.frames_to_death/4)])
 				end
 			end
-			spr(sprite,entity.x-3,entity.y-4)
+			spr(sprite,self.x-3,self.y-4)
 			pal()
 			-- draw countdown
-			if entity.species_name=="firefly" and entity.caught_web_point and entity.frames_until_escape<=105 then
-				print(ceil(entity.frames_until_escape/35),entity.x,entity.y-10,8)
+			if self.species_name=="firefly" and self.caught_web_point and self.frames_until_escape<=105 then
+				print(ceil(self.frames_until_escape/35),self.x,self.y-10,8)
 			end
 		end,
-		escape=function(entity)
-			if entity.caught_web_point then
+		escape=function(self)
+			if self.caught_web_point then
 				-- beetles chew through web
-				if entity.species_name=="beetle" then
-					entity.caught_web_point.die(entity.caught_web_point)
+				if self.species_name=="beetle" then
+					self.caught_web_point:die()
 				end
-				entity.caught_web_point.caught_bug,entity.caught_web_point=nil -- ,nil
+				self.caught_web_point.caught_bug,self.caught_web_point=nil -- ,nil
 			end
-			entity.render_layer,entity.frames_to_death,entity.vy,entity.is_catchable=8,12,-1.5 -- ,false
+			self.render_layer,self.frames_to_death,self.vy,self.is_catchable=8,12,-1.5 -- ,false
 		end,
-		on_death=function(entity)
-			if entity.caught_web_point then
-				entity.caught_web_point.caught_bug=nil
+		on_death=function(self)
+			if self.caught_web_point then
+				self.caught_web_point.caught_bug=nil
 			end
 		end
 	},
 	dragonfly_fireball_spawn={
 		render_layer=4,
 		frames_to_death=30,
-		draw=function(entity)
-			local x,y,f=bug.x,bug.y,entity.frames_alive
+		draw=function(self)
+			local x,y,f=bug.x,bug.y,self.frames_alive
 			local s,c,r=(10-f/3)*sin(f/100),(10-f/3)*cos(f/100),f/20
 			color(8)
 			circfill(x+s,y+c,r)
@@ -559,13 +580,13 @@ local entity_classes={
 			circfill(x-c,y+s,r)
 			circfill(x+c,y-s,r)
 		end,
-		on_death=function(entity)
-			if entity.bug.is_alive and entity.bug.caught_web_point and spider and spider.is_alive then
-				local dx,dy=spider.x-entity.bug.x,spider.y-entity.bug.y
+		on_death=function(self)
+			if self.bug.is_alive and self.bug.caught_web_point and spider and spider.is_alive then
+				local dx,dy=spider.x-self.bug.x,spider.y-self.bug.y
 				local dist=max(1,sqrt(dx*dx+dy*dy))
 				create_entity("dragonfly_fireball",{
-					x=entity.bug.x,
-					y=entity.bug.y,
+					x=self.bug.x,
+					y=self.bug.y,
 					vx=dx/dist,
 					vy=dy/dist
 				})
@@ -575,24 +596,24 @@ local entity_classes={
 	dragonfly_fireball={
 		frames_to_death=150,
 		render_layer=6,
-		update=function(entity)
-			entity.x+=entity.vx
-			entity.y+=entity.vy
-			if spider and spider.is_alive and spider.hitstun_frames<=0 and 9>calc_square_dist(entity.x,entity.y,spider.x,spider.y) then
+		update=function(self)
+			self.x+=self.vx
+			self.y+=self.vy
+			if spider and spider.is_alive and spider.hitstun_frames<=0 and 9>calc_square_dist(self.x,self.y,spider.x,spider.y) then
 				spider.hitstun_frames,spider.vy=25,-1.5
 				spider.vx*=0.5
-				entity.die(entity)
+				self:die()
 			end
 		end,
-		draw=function(entity)
-			circfill(entity.x,entity.y,1,8)
+		draw=function(self)
+			circfill(self.x,self.y,1,8)
 		end
 	},
 	firefly_explosion={
 		frames_to_death=18,
 		render_layer=2,
-		draw=function(entity)
-			local x,y,f=entity.x+rnd(2)-1,entity.y+rnd(2)-1,flr(entity.frames_alive)
+		draw=function(self)
+			local x,y,f=self.x+rnd(2)-1,self.y+rnd(2)-1,flr(self.frames_alive)
 			local r=9+1.8*f-f*f/20
 			if f>=12 then
 				color(1)
@@ -609,33 +630,33 @@ local entity_classes={
 	floating_points={
 		render_layer=9,
 		frames_to_death=20,
-		update=function(entity)
-			entity.y-=0.5
+		update=function(self)
+			self.y-=0.5
 		end,
-		draw=function(entity)
-			print(entity.text,entity.x-2*#entity.text,entity.y-2,entity.colors[max(1,flr(entity.frames_alive/2-5))])
+		draw=function(self)
+			print(self.text,self.x-2*#self.text,self.y-2,self.colors[max(1,flr(self.frames_alive/2-5))])
 		end
 	},
 	spawn_ring={
 		render_layer=1,
 		frames_to_death=48,
-		draw=function(entity)
-			circ(entity.target.x,entity.target.y,15-entity.frames_alive/4,1)
+		draw=function(self)
+			circ(self.target.x,self.target.y,15-self.frames_alive/4,1)
 		end
 	},
 	splash={
 		frames_to_death=18,
-		draw=function(entity)
-			circ(entity.x,entity.y,entity.frames_alive/3,entity.frames_alive>8 and 6 or 7)
+		draw=function(self)
+			circ(self.x,self.y,self.frames_alive/3,self.frames_alive>8 and 6 or 7)
 		end
 	},
 	level_intro={
 		x=63,
 		y=28,
 		frames_to_death=108,
-		draw=function(entity)
-			if entity.frames_alive>=28 then
-				local colors,j,i={1,5,13,6,7},mid(flr(entity.frames_alive/4-6),1,flr(28-entity.frames_alive/4))
+		draw=function(self)
+			if self.frames_alive>=28 then
+				local colors,j,i={1,5,13,6,7},mid(flr(self.frames_alive/4-6),1,flr(28-self.frames_alive/4))
 				for i=j,#colors do
 					pal(colors[i],colors[j])
 				end
@@ -645,57 +666,68 @@ local entity_classes={
 				pal()
 			end
 		end,
-		on_death=function(entity)
-			create_entity("spider_respawn",extract_props(entity,{"x","y","respawn_x","respawn_y"}))
+		on_death=function(self)
+			create_entity("spider_respawn",extract_props(self,{"x","y","respawn_x","respawn_y"}))
 		end
 	},
 	moving_platform={
-		-- vy=0.5,
 		render_layer=3,
-		add_to_game=function(entity)
-			add(moving_platforms,entity)
+		add_to_game=function(self)
+			add(moving_platforms,self)
 		end,
-		init=function(entity)
-			entity.chains=create_entity("chains",{})
+		init=function(self)
+			self.chains=create_entity("chains",{})
 		end,
-		update=function(entity)
-			local f=entity.frames_alive%516
-			entity.vx=0
-			entity.vy=0
-			if f<=90 then
-				entity.vx=0.5
-			elseif f>110 and f<=238 then
-				entity.vy=0.5
-			elseif f>258 and f<=348 then
-				entity.vx=-0.5
-			elseif f>368 and f<=496 then
-				entity.vy=-0.5
+		update=function(self)
+			local f=self.frames_alive%357
+			if f<128 then
+				self.vy=0.5
+			elseif 178<f and f<=306 then
+				self.vy=-0.5
+			else
+				self.vy=0
 			end
-			entity.x+=entity.vx
-			entity.y+=entity.vy
-			entity.chains.x,entity.chains.y=entity.x,entity.y
+			self.x+=self.vx
+			self.y+=self.vy
+			self.chains.x,self.chains.y=self.x,self.y
 		end,
-		draw=function(entity)
-			sspr(48,72,40,8,entity.x,entity.y)
-			if entity.has_hardhat then
-				spr(147,entity.x+8,entity.y-8)
-			end
+		draw=function(self)
+			sspr(72,96,40,8,self.x,self.y)
+			spr(197,self.x+8,self.y-8)
 		end,
-		contains_point=function(entity,x,y)
-			if entity.has_hardhat and x>=entity.x+8 and x<entity.x+16 and y>=entity.y-6 and y<entity.y then
+		contains_point=function(self,x,y)
+			if x>=self.x+8 and x<self.x+16 and y>=self.y-6 and y<self.y then
 				return true
 			end
-			return x>=entity.x and y>=entity.y and x<entity.x+40 and y<entity.y+8
+			return x>=self.x and y>=self.y and x<self.x+40 and y<self.y+8
 		end
 	},
 	chains={
 		render_layer=2,
-		draw=function(entity)
+		draw=function(self)
 			local y
-			for y=entity.y-8,-8,-8 do
-				spr(146,entity.x,y)
-				spr(146,entity.x+33,y)
+			for y=self.y-8,-8,-8 do
+				spr(196,self.x,y)
+				spr(196,self.x+33,y)
 			end
+		end
+	},
+	wind_particle={
+		render_layer=1,
+		init=function(self)
+			self.is_truth=rnd_int(0,1)
+		end,
+		update=function(self)
+			self.vx+=wind_x/20
+			self.vy+=wind_y/20
+			self.vx,self.vy=self.vx*0.96+0.01*wind_dir,self.vy*0.96
+			self.x+=self.vx*self.move_scale
+			self.y+=self.vy*self.move_scale
+			self.x,self.y=wrap_number(self.x,-10,138),wrap_number(self.y,-10,130)
+		end,
+		draw=function(self)
+			local tail_mult=(self.vx*self.vx+self.vy*self.vy<0.2 and 0 or 1.5)
+			line(self.x,self.y,self.x-self.vx*tail_mult,self.y-self.vy*tail_mult,1)
 		end
 	}
 }
@@ -707,7 +739,12 @@ function _init()
 	init_scene("game")
 end
 
+-- local frame_skip=0
 function _update()
+	-- frame_skip=increment_looping_counter(frame_skip)
+	-- if frame_skip%4>0 then
+	-- 	return
+	-- end
 	if transition_frames_left>0 then
 		transition_frames_left=decrement_counter(transition_frames_left)
 		if transition_frames_left==30 then
@@ -747,7 +784,7 @@ function _draw()
 		end
 		for y=0,128,6 do
 			for x=0,128,6 do
-				local size=mid(0,50-t+y/10-x/40,4)
+				local size=mid(0,50-t-y/10-x/40,4)
 				if transition_frames_left<30 then
 					size=4-size
 				end
@@ -768,7 +805,7 @@ end
 
 -- title functions
 function init_title()
-	level_num=1
+	level_num,score_cumulative=1,0
 end
 
 function update_title()
@@ -778,7 +815,12 @@ function update_title()
 end
 
 function draw_title()
-	draw_corners()
+	-- draw corners
+	spr(12,1,1)
+	spr(12,119,1,1,1,true)
+	spr(12,1,119,1,1,false,true)
+	spr(12,119,119,1,1,true,true)
+	-- draw title
 	sspr(0,0,48,32,40,32)
 	line(73,64,73,80,7)
 	spr(13,69,81)
@@ -790,16 +832,26 @@ end
 
 -- game functions
 function init_game()
-	local level=levels[level_num]
-	init_simulation()
-	score,bugs_eaten,timer,frames_until_spawn_bug,spawns_until_pause=0,0,125,0,3
+	local i
+	-- reset simulation
+	level,score,bugs_eaten,timer,frames_until_spawn_bug,spawns_until_pause=levels[level_num],0,0,140,0,3
+	entities,new_entities,web_points,web_strands,moving_platforms,spider={},{},{},{},{} -- ,nil`
+	-- reset and load tiles
 	load_tiles(level[4],level[3])
-	spider=nil
-	-- create_entity("level_intro",{respawn_x=level[1],respawn_y=level[2]})
-	spider=create_entity("spider",{x=level[1],y=level[2],respawn_x=level[1],respawn_y=level[2]})
+	-- create entities
+	create_entity("level_intro",{respawn_x=level[1],respawn_y=level[2]})
+	-- spider=create_entity("spider",{x=level[1],y=level[2],respawn_x=level[1],respawn_y=level[2]})
 	if level[5]=="platforms" then
-		create_entity("moving_platform",{x=88,y=96,frames_alive=260})
-		create_entity("moving_platform",{x=42,y=32,has_hardhat=true})
+		create_entity("moving_platform",{x=52,y=32})
+	elseif level[5]=="wind" then
+		wind_frames,wind_dir,wind_x,wind_y=100,1,0,0
+		for i=1,50 do
+			create_entity("wind_particle",{
+				x=rnd_int(0,128),
+				y=rnd_int(0,120),
+				move_scale=0.25+rnd(0.75)
+			})
+		end
 	end
 end
 
@@ -811,7 +863,6 @@ function update_game()
 		end
 		timer=decrement_counter(timer)
 	end
-
 	-- spawn bugs from 1:30 to 0:04
 	if timer==mid(4,timer,90) then
 		local phase=min(flr(4-timer/30),3)
@@ -851,95 +902,25 @@ function update_game()
 			end
 		end
 	end
-
-	update_simulation()
-end
-
-function draw_game()
-	camera(0,-8)
-	draw_simulation()
-	-- draw ui
-	camera()
-	rectfill(0,0,127,7,0)
-	-- draw webbing meter
-	-- if spider then
-	color(spider and spider.is_spinning_web and 7 or 5)
-	rectfill(35,2,35+50*(spider and spider.webbing/spider.max_webbing or 1),5)
-	-- end
-	rect(35,1,85,6)
-	spr(62,87,0)
-	-- draw timer
-	if timer<=5 and scene_frame%30<=20 then
-		color(8)
-	else
-		color(7)
-	end
-	local t=min(timer,120)
-	print(flr(t/60)..":"..(t%60<10 and "0" or "")..t%60,112,2)
-	-- draw score
-	print(score<=0 and "0" or score.."0",1,2,7)
-end
-
-
--- scoring functions
-function update_scoring()
-	local final_frame=44+bugs_eaten+score
-	if scene_frame>15 and btnp(4) then
-		if scene_frame<final_frame then
-			scene_frame=final_frame
-		else
-			level_num+=1
-			transition_to_scene(level_num>#levels and "title" or "game")
+	-- update the wind
+	if level[5]=="wind" then
+		wind_frames=decrement_counter(wind_frames)
+		if wind_frames<=0 then
+			if wind_x==0 and wind_y==0 then
+				wind_dir,wind_frames,wind_x,wind_y=-1*wind_dir,rnd_int(175,300),wind_dir*rnd_int(2,4),rnd_int(-2,1)/2
+			else
+				wind_frames,wind_x,wind_y=rnd_int(125,250),0,0
+			end
 		end
 	end
-end
-
-function draw_scoring()
-	draw_corners()
-	color(7)
-	print("level complete!",35,24)
-	line(35,30,92,30)
-	local final_frame,f=44+bugs_eaten+score,scene_frame-40
-	-- draw number of bugs eaten
-	print("bugs eaten",15,50)
-	local b=mid(0,f,bugs_eaten)
-	if b>0 or b>=bugs_eaten and scene_frame>40 then
-		print(b,110-4*#(""..b),50)
-	end
-	-- draw score
-	print("score",15,68)
-	if b>=bugs_eaten and scene_frame>40 then
-		local s=mid(0,f-bugs_eaten,score)
-		local score_text=s==0 and "0" or s.."0"
-		print(score_text,110-4*#score_text,68)
-	end
-	-- draw continue text
-	if scene_frame>=final_frame then
-		if (scene_frame-final_frame)%30<20 then
-			print("press z to continue",26,93,13)
-		end
-	end
-end
-
-
--- simulation functions
-function init_simulation()
-	entities,new_entities,web_points,web_strands,moving_platforms={},{},{},{},{}
-	reset_tiles()
-end
-
-function update_simulation()
 	-- update entities
 	foreach(entities,function(entity)
 		-- call the entity's update function
-		entity.update(entity)
+		entity:update()
 		-- do some default update stuff
 		entity.frames_alive=increment_looping_counter(entity.frames_alive)
-		if entity.frames_to_death>0 then
-			entity.frames_to_death-=1
-			if entity.frames_to_death<=0 then
-				entity.die(entity)
-			end
+		if entity.frames_to_death>0 and decrement_counter_prop(entity,"frames_to_death") then
+			entity:die()
 		end
 	end)
 	-- add new entities to the game
@@ -955,7 +936,8 @@ function update_simulation()
 	end)
 end
 
-function draw_simulation()
+function draw_game()
+	camera(0,-8)
 	-- render layers:
 	--  1=bg effects
 	--  2=background
@@ -967,14 +949,14 @@ function draw_simulation()
 	--  7=spider
 	--  8=foreground
 	--  9=ui effects
-	local j,i=#entities+1
+	local j,t,i=#entities+1,min(timer,135) -- ,nil
 	-- draw background entities
 	for i=1,#entities do
 		if entities[i].render_layer>2 then
 			j=i
 			break
 		end
-		entities[i].draw(entities[i])
+		entities[i]:draw()
 	end
 	-- draw the level
 	foreach(tiles,function(tile)
@@ -1007,6 +989,75 @@ function draw_simulation()
 	for i=j,#entities do
 		entities[i].draw(entities[i])
 	end
+	-- draw ui
+	camera()
+	rectfill(0,0,127,7,0)
+	-- draw webbing meter
+	color(spider and spider.is_spinning_web and 7 or 5)
+	rectfill(35,2,35+50*(spider and spider.webbing/spider.max_webbing or 1),5)
+	-- end
+	rect(35,1,85,6)
+	spr(62,87,0)
+	-- draw timer
+	if timer<=5 and scene_frame%30<=20 then
+		color(8)
+	else
+		color(7)
+	end
+	print(flr(t/60)..":"..(t%60<10 and "0" or "")..t%60,112,2)
+	-- draw score
+	print(score_cumulative+score<=0 and "0" or (score_cumulative+score).."0",1,2,7)
+end
+
+
+-- scoring functions
+function init_scoring()
+	score_cumulative+=score
+end
+
+function update_scoring()
+	local final_frame=74+bugs_eaten+score
+	if scene_frame>15 and btnp(4) then
+		if scene_frame<final_frame then
+			scene_frame=final_frame
+		else
+			level_num+=1
+			transition_to_scene(level_num>#levels and "title" or "game")
+		end
+	end
+end
+
+function draw_scoring()
+	draw_corners()
+	color(7)
+	print("level complete!",35,24)
+	line(35,30,92,30)
+	local f,score_text=scene_frame-40
+	-- draw number of bugs eaten
+	local b=mid(0,f,bugs_eaten)
+	if f>0 then
+		print("bugs eaten",15,45)
+		print(b,110-4*#(""..b),45)
+	end
+	-- draw score
+	if f>bugs_eaten+20 then
+		print("score",15,45+14)
+		local s=mid(0,f-bugs_eaten-20,score)
+		score_text=s==0 and "0" or s.."0"
+		print(score_text,110-4*#score_text,45+14)
+	end
+	-- draw cumulative score
+	if f>bugs_eaten+score+40 then
+		print("total score",15,45+2*14)
+		score_text=score_cumulative==0 and "0" or score_cumulative.."0"
+		print(score_text,110-4*#score_text,45+2*14)
+	end
+	-- draw continue text
+	if f>bugs_eaten+score+60 then
+		if (f-bugs_eaten-score-60)%30<20 then
+			print("press z to continue",26,93,13)
+		end
+	end
 end
 
 
@@ -1020,7 +1071,7 @@ function create_entity(class_name,args)
 		y=0,
 		vx=0,
 		vy=0,
-		is_alive=0,
+		is_alive=true,
 		frames_alive=0,
 		frames_to_death=0,
 		add_to_game=noop,
@@ -1028,11 +1079,11 @@ function create_entity(class_name,args)
 		update=noop,
 		draw=noop,
 		on_death=noop,
-		die=function(entity)
-			entity.on_death(entity)
-			entity.is_alive=false
+		die=function(self)
+			self:on_death()
+			self.is_alive=false
 		end
-	}
+	} -- ,nil,nil
 	-- add class properties/methods onto it
 	for k,v in pairs(entity_classes[class_name]) do
 		entity[k]=v
@@ -1042,7 +1093,7 @@ function create_entity(class_name,args)
 		entity[k]=v
 	end
 	-- initialize it
-	entity.init(entity,args)
+	entity:init(args)
 	-- return it
 	add(new_entities,entity)
 	return entity
@@ -1050,7 +1101,7 @@ end
 
 function add_new_entities_to_game()
 	foreach(new_entities,function(entity)
-		entity.add_to_game(entity)
+		entity:add_to_game()
 		add(entities,entity)
 	end)
 	new_entities={}
@@ -1058,17 +1109,14 @@ end
 
 
 -- tile functions
-function reset_tiles()
+function load_tiles(map,tileset_name)
+	local i,c,r
+	-- reset tiles
 	tiles,level_spawn_points={},{{},{},{}}
-	local i
 	for i=1,240 do
 		tiles[i]=false
 	end
-end
-
-function load_tiles(map,tileset_name)
 	-- loop through the 2d array of symbols
-	local c,r
 	for c=1,16 do
 		for r=1,15 do
 			local tile_coords,s,tile_index,i={c,r},r*16+c-16
@@ -1099,7 +1147,7 @@ function load_tiles(map,tileset_name)
 end
 
 function create_tile(tileset,tile_index,col,row)
-	local is_flipped,half_tile_index,solid_bits=(tile_index%2==0),ceil(tile_index/2),{255,255}
+	local is_flipped,half_tile_index,solid_bits,i=(tile_index%2==0),ceil(tile_index/2),{255,255} -- ,nil
 	if #tileset[2]>=2*half_tile_index then
 		solid_bits={tileset[2][2*half_tile_index-1],tileset[2][2*half_tile_index]}
 	end
@@ -1124,12 +1172,13 @@ function create_tile(tileset,tile_index,col,row)
 end
 
 function get_tile_at(x,y)
-	if y>=0 and y<=116 then
+	if 0<=y and y<=116 then
 		return tiles[1+flr(x/8)*15+flr(y/8)]
 	end
 end
 
 function get_moving_platform_at(x,y)
+	local i
 	for i=1,#moving_platforms do
 		if moving_platforms[i].contains_point(moving_platforms[i],x,y) then
 			return moving_platforms[i]
@@ -1139,23 +1188,22 @@ end
 
 function is_solid_tile_at(x,y)
 	-- turn the position into a bit 1 to 16
-	local tile,bit,i=get_tile_at(x,y),1+flr(x/2)%4+4*(flr(y/2)%4)
+	local tile,bit,i=get_tile_at(x,y),1+flr(x/2)%4+4*(flr(y/2)%4) -- ,nil
 	if tile then
 		-- check that against the tile's solid_bits
 		if bit>8 then
 			return band(2^(bit-9),tile.solid_bits[2])>0
-		else
-			return band(2^(bit-1),tile.solid_bits[1])>0
 		end
+		return band(2^(bit-1),tile.solid_bits[1])>0
 	end
 	return false
 end
 
 
 -- math functions
-function apply_gravity(entity,grav,space_grav)
+function apply_gravity(entity,grav,space_grav,wind_mag)
 	-- some levels have space gravity
-	if levels[level_num][5]=="space" then
+	if level[5]=="space" then
 		local square_dist,x,y=calc_square_dist(entity.x,entity.y,63,55),create_vector(63-entity.x,55-entity.y,space_grav)
 		if square_dist>576 then
 			entity.vx+=x
@@ -1164,6 +1212,11 @@ function apply_gravity(entity,grav,space_grav)
 	-- others are pretty simple
 	else
 		entity.vy+=grav
+	end
+	-- apply wind
+	if level[5]=="wind" then
+		entity.vx+=wind_mag*wind_x
+		entity.vy+=wind_mag*wind_y
 	end
 end
 
@@ -1194,21 +1247,19 @@ function calc_square_dist(x1,y1,x2,y2)
 end
 
 function calc_closest_point_on_line(x1,y1,x2,y2,cx,cy)
-	local dx,dy,match_x,match_y=x2-x1,y2-y1
+	local dx,dy,match_x,match_y=x2-x1,y2-y1 -- ,nil,nil
 	-- if the line is nearly vertical, it's easy
 	if 0.1>dx and dx>-0.1 then
-		match_x=x1
-		match_y=cy
+		match_x,match_y=x1,cy
 	-- if the line is nearly horizontal, it's also easy
 	elseif 0.1>dy and dy>-0.1 then
-		match_x=cx
-		match_y=y1
+		match_x,match_y=cx,y1
 	--otherwise we have a bit of math to do...
 	else
 		-- find equation of the line y=mx+b
 		-- find reverse equation from circle
 		local m,m2=dy/dx,-dx/dy
-		local b,b2=y1-m*x1,cy-m2*cx -- b=y-mx  /  b=y-mx
+		local b,b2=y1-m*x1,cy-m2*cx -- b=y-mx
 		-- figure out where their y-values are the same
 		match_x=(b2-b)/(m-m2) -- mx+b=m2x+b2 --> x=(b2-b)/(m-m2)
 		-- plug that into either formula to get the y-value at that x-value
@@ -1224,7 +1275,7 @@ end
 
 -- web functions
 function calc_closest_web_point(x,y,allow_unanchored,allow_occupied)
-	local closest_square_dist,closest_web_point=9999
+	local closest_square_dist,closest_web_point=9999 -- ,nil
 	foreach(web_points,function(web_point)
 		if not web_point.is_being_spun and
 			(allow_occupied or not web_point.caught_bug) and
@@ -1245,12 +1296,10 @@ function calc_closest_spot_on_web(x,y,allow_unanchored)
 		closest_x,closest_y=closest_web_point.x,closest_web_point.y
 	end
 	foreach(web_strands,function(web_strand)
-		if not web_strand.from.is_being_spun and not web_strand.to.is_being_spun and
-			(allow_unanchored or (web_strand.from.has_been_anchored and web_strand.to.has_been_anchored)) then
-			local x2,y2=calc_closest_point_on_line(
-				web_strand.from.x,web_strand.from.y,
-				web_strand.to.x,web_strand.to.y,
-				x,y)
+		local from_obj,to_obj=web_strand.from,web_strand.to
+		if not from_obj.is_being_spun and not to_obj.is_being_spun and
+			(allow_unanchored or (from_obj.has_been_anchored and to_obj.has_been_anchored)) then
+			local x2,y2=calc_closest_point_on_line(from_obj.x,from_obj.y,to_obj.x,to_obj.y,x,y)
 			if x2!=nil and y2!=nil then
 				local square_dist=calc_square_dist(x,y,x2,y2)
 				if not closest_square_dist or square_dist<closest_square_dist then
@@ -1260,15 +1309,6 @@ function calc_closest_spot_on_web(x,y,allow_unanchored)
 		end
 	end)
 	return closest_x,closest_y,closest_square_dist
-end
-
-
--- draw helper functions
-function draw_corners()
-	spr(12,1,1)
-	spr(12,119,1,1,1,true)
-	spr(12,1,119,1,1,false,true)
-	spr(12,119,119,1,1,true,true)
 end
 
 
@@ -1295,7 +1335,9 @@ function increment_looping_counter(n)
 end
 
 function decrement_counter_prop(obj,k)
+	local just_reached_zero=0<obj[k] and obj[k]<=1
 	obj[k]=decrement_counter(obj[k])
+	return just_reached_zero
 end
 
 function decrement_counter(n)
@@ -1323,11 +1365,11 @@ end
 function filter_entity_list(list)
 	local num_deleted,i=0
 	for i=1,#list do
-		if not list[i].is_alive then
+		if list[i].is_alive then
+			list[i-num_deleted],list[i]=list[i],nil
+		else
 			list[i]=nil
 			num_deleted+=1
-		else
-			list[i-num_deleted],list[i]=list[i],nil
 		end
 	end
 end
@@ -1345,27 +1387,27 @@ end
 scenes={
 	title={init_title,update_title,draw_title},
 	game={init_game,update_game,draw_game},
-	scoring={noop,update_scoring,draw_scoring}
+	scoring={init_scoring,update_scoring,draw_scoring}
 }
 
 
 __gfx__
 00000000000000000000007000000000000000000000000000000000000000000000000000000000000000000000000011011111000070000000700000007000
-00000077770000000000070700000000000000000000000000077777777000000800080008000800080008000800080010100010000777000007770000077700
-000077700d7700000000070700000000000000000000000000700000000700000080800000808000008080000080800001111100070777070007770707077700
-00077600000770000500070700000000000000000000000000000000000000000008000000080000000800000008000010100000007777700777777000777777
-00777000000070005050770700000000000000000000000000077700007770000080800000808000008080000080800010100000000777000007770000077700
-007650000000d700d000776000000000000000000000000000777070077707000800080008000800080008000800080010100000007171700771717000717177
-00670000000007000ddd770000007770007700777dd0000000777070077707000000000000000000000000000000000011000000070707070007070707070700
-0077d00000000700000077000007007007070700000d000000777770077777000000000000000000000000000000000010000000000000000000000000000000
-0077700000000700076070007007770070070077000d000000077700007770000000000000000000000000000000000007770070000000000000000000000000
-0007770000007000700770060707000d7007000070d0000007000000000000700800080008000800080008000800080007007777077707000777007007770700
-000777700005700007770677700077700777077700d0000000070700007070000080800000808000008080000080800007007070077777000777770707777700
-0000777775d6000000005500000000000007d000000ddd0000000000000000000008000000080000000800000008000000777700077777770777777007777777
-00000777777000000050000000070000007700000ddd0d0000000007070000000080800000808000008080000080800000707000007771700077717000777170
-0000dd777777600000055ddd000700000707ddddd000d00000007007070070000800080008000800080008000800080007770000077717070777170700771707
-000666d777767700000000007dd77dddd7d700000000000000000770007700000000000000000000000000000000000070700000000770000007700007077000
-00777500777767700000000707070077077000005000000000000070007000000000000000000000000000000000000007770000000707000007070000700700
+00000077770000000000070700000000000000000000000008000800080008000800080008000800080008000800080010100010000777000007770000077700
+000077700d7700000000070700000000000000000000000000808000008080000080800000808000008080000080800001111100070777070007770707077700
+00077600000770000500070700000000000000000000000000080000000800000008000000080000000800000008000010100000007777700777777000777777
+00777000000070005050770700000000000000000000000000808000008080000080800000808000008080000080800010100000000777000007770000077700
+007650000000d700d000776000000000000000000000000008000800080008000800080008000800080008000800080010100000007171700771717000717177
+00670000000007000ddd770000007770007700777dd0000000000000000000000000000000000000000000000000000011000000070707070007070707070700
+0077d00000000700000077000007007007070700000d000000000000000000000000000000000000000000000000000010000000000000000000000000000000
+0077700000000700076070007007770070070077000d000000000000000000000000000000000000000000000000000007770070000000000000000000000000
+0007770000007000700770060707000d7007000070d0000008000800080008000800080008000800080008000800080007007777077707000777007007770700
+000777700005700007770677700077700777077700d0000000808000008080000080800000808000008080000080800007007070077777000777770707777700
+0000777775d6000000005500000000000007d000000ddd0000080000000800000008000000080000000800000008000000777700077777770777777007777777
+00000777777000000050000000070000007700000ddd0d0000808000008080000080800000808000008080000080800000707000007771700077717000777170
+0000dd777777600000055ddd000700000707ddddd000d00008000800080008000800080008000800080008000800080007770000077717070777170700771707
+000666d777767700000000007dd77dddd7d700000000000000000000000000000000000000000000000000000000000070700000000770000007700007077000
+00777500777767700000000707070077077000005000000000000000000000000000000000000000000000000000000007770000000707000007070000700700
 07770000077776770000000707070570700000550000000000000000000000000000000000000000000000000000000077707000000000000000000000000000
 d7700000007776676005000707007007dddddd000000000008000800080008000800080008000800080008000800080070077700007000700007070000700070
 77700077660777667050507707000000000000000000000000808000008080000080800000808000008080000080800070070000000707000007070000070700
@@ -1414,62 +1456,6 @@ d7700000007776676005000707007007dddddd000000000008000800080008000800080008000800
 00a7a00000a7a00000a9a00060a9a06005a5a6600a59000006a5aa00700770060707000d707007000007700d0800080008000800080008000800080008000800
 000600000006000000575000005750000aaa000050000000066000000777067770007770070000777d760dd00000000000000000000000000000000000000000
 000000000000000000060000000600005000500000000000000000000000550000000000dd000000000000000000000000000000000000000000000000000000
-000000000002222200004499000044990004000400000449000033bb3bb3bbbb0000000333b333bb333b33b34444444499999999999999999999999933b3bb33
-000000000022242400004499000049440000404900004444000033b33bbbbbbb0000033b3bbbbbbbbbbbbb304442444422222222999999999999999933b33b3b
-22222222222242420000494400004499000404490044449900003bb33b3bbb3b000333bbbbbbbbbbb33b3300444444444242424299999999999944993bb3bb33
-44444244424244440000449900004449000004440444949900003bbb3b3b3b3b0003bb3bbbbb33b33b333000424442442444242499999999994999993bb33b3b
-44444444244424240000449900440494000044994449994900003bbb33bb33bb0033b3bbbbb3bb33333000004444244444444244999999999994444933b33b3b
-424444444422444200004449040000490000444944449999000033b3333bb3bb033b33bb3b33333330000000444244422424424499999999999999993bb33b33
-444444244444442400004944000000440000094449944499000033bb0333333b3333bbbb33333000000000002422242442442424999999999999999933b3bb33
-4444444444444444000044990000000400004499449999990000033b0033b3333b3bbbbb33300000000000002222222244444444999999999999999933b33b3b
-33bbb3bb00000000005050000000000000dddd00007766008888888888888888888888888888888888888888760d0006d000706d76aaaaaaddd22ddd0000002d
-333bb33b0000000000050000000000000076dd0007d66dd0022224422222222422444222222222222222242076006006d006006d76a5555add2225dd0000002d
-3b3bbb3300111100000500000000000000066dd0076766d00222ee22222222e22eee2222222222222222e22076000706d0d0006d76aaaaaa652222dd0000002d
-3b3bbbb3001111000050500000aaaa00000006d007d76dd00220022222200e22eee00222222002222220022076000066dd00006d76a55a5a6520025600000022
-3333bbb311111100005050000aaaaaa0007006d006d76dd002e002222220022eee2002222220022222e0022076000706d0d0006d76aaaaaad200002500000022
-3b33bbb311111100000500000aaaaaa0006776d00aaaa9900ee22222222e22eee2222222222222222e22222076006006d006006d76aaa55a520000220000002d
-33b33b3b11111111000500000aa999a000066d000aaaa9900e22222222e22eee2222222222222222e2222220760d0006d000706d76aaaaaa200000020000000d
-33bbb33b111111110050500099a9a9a900000000066666d0888888888888888888888888888888888888888876d00006d000066d76d0000d0000000000000002
-0000002d0000022d002222d602222d6200222d22dd222ddddddddddddddddddddddddddd000000000000000000000000000000000000000c00cc111100c61613
-0000002d0000022200022d6602252266002222d2222d6622ddddddd2ddddddddd22ddddd00000000000000000006666600000000000000cc00cc1111006c6333
-0000002d00000222000252260225d2220222d2d6ddd6226dd22dd6dddddddddddddd55dd000000000000c000666666660000000000000cc600cc111100c61336
-0000002d0000025200022d220222d6260225222622d22222d65dd266dddddddd5dd22ddd00000000000c0c0066666666000006660000cc6100c6111600663363
-0000002d0000002d00002dd2022522620222dd22d2222ddd6d25dd22dddddddd25ddddd5000005000000c00066666166000666660000c616006c616100c63116
-000000220000002d000022d600222d6602222666ddd2222dd52225ddddddddddd225552d00000000000000006666161600666166000cc16100c6161600631113
-0000002d0000002d000022220025222602252226222dddd252222222dddddddddd2222dd0000000000500000636661110c6116160006c111006c111100cc1161
-0000002d0000002200002d220022ddd60222dd6200022222222222dddddddddddddddddd000000000000000036661111cc111166000cc11100cc111100cc1611
-000cc111c6161116166166111111111100000000000000006d66d6d00000dc0000767700c00ccc00111111331666661633333111111111113661111166666666
-000cc1110c61616666166166111166110000006666000000d6dd6dd00600cd007776777750c666c0166166366666616133111111636111113361611166666666
-000cc11100666616666166666116166100006666666600006d6ddd006d60dc006c7677760c66ff6c111636666661661611111111663616113336161166666666
-0000cc1100066666666666666611666100066d6666666000d6dddd006d6d666d06777760c566fffc111363666611166161111111666661613633666666666666
-0000cc110000066666666666666666160066d6666dd66600ddddd000dd6d66dd007777000c6f6f6c111633366116161616111111336666163363166666666666
-00000cc1000000006666666666666666006d6d66d66d6600dddd00006d60cd000075570005c6f66c113333631616666111111111633666613336116666666666
-000000cc0000000000066666666660000666d666d66d6660dd0000000600dc0000577500505cc6c0113333366111661111111111363116661111111166666666
-0000000c000000000000000000000000066d66666dd66660000000000000cd0000055000050ccc00133333113611111111111111636611111111111166666666
-dd66666666666666d6d000006d66d5556d666d666d555555004400400000999a999a9aa9ccccccccd999af9a9a9a99aa494f49446d6666666666666666666666
-ddd666666d66dd66d6d000006d55d6d06d6666655dd6d500004444000999a9aa9aa9aaaaccccccccdd99faa9aaa9aaaa44ff49446d6d6666dddddddddddddddd
-66dd6666d6dd66d6d50000005d66d6d05d55555d665d000004444000099a9aaa99aaaaaacccccccccdd999afaaaaaaaa444f44945d5555555555555555555555
-666d66666ddd66d66d0000006d66d5006666d66ddd0000004f9400000999aa9a9aa9aaaaccccccccdddd99f9aaaaa9a944f4f49466666d66dd5dd5ddd5dddddd
-666d6666dddddd6d6d0000005d5550006555ddd50000000099400000099999a9999a9aaaccccccccccddd99faa9a9a9944f4f44466d66d66ddddd5ddd5555d5d
-666d6666ddddd6d6d0000000d6d500006d6655000000000094000000000999999999a9a9ccccccccccccdd99a9a9999949444f446666dd6666666d666d66d555
-66d66666dddd6d6d50000000d6d5000055dd000000000000440000000000099909999999ccccccccccddddd99999999949f44f9455555d5555555d556d55d66d
-dd66666dddddddddd00000005d5000005500000000000000400000000000000000999999cccccccccccccddd9999999944ff44946d66666d6d6666d655005555
-ff9f9dd9f56666669f9a9a9a00011000000110000000000000000000000000000000000000000000eefe0000f00000000b3b0000004444002eeeef0022222ee0
-9aa9dd9d9566d66699a9a9af0001100000011111000111110000000000000333b300000000000000eeefe000ef00000033b3b0000000440022eeeef0e22eeee0
-aafa9f55559555559f9a9af9000110000001111100011111000ddddd00003b3bbb30000300000000ee2ef000eef00000d3333ddddddd44dd22e222efe2eeeeee
-9f9af99d99666d6df99f9aaa0001100000000000000110000006111103bbb3bb3b30033b00000000222eef00eef000001541111111114441eeee2eef22222220
-a9afa9f9f9dd6d669af9a9fa000110000000000000011000000666663b3b3b33b3303b3b0000000022eeef0022f000006666666666666666ffffeeef22222220
-9af9aa999dd66d669f9af9af000110000000000000011000000ddddd33b3b503330033b3660000662eeeeef02eef0000d6dddddddd6dddd6eeeeffeeeeeeeee0
-af9af9f9f5595d55999f9af9000110000000000000011000000ddddd0333005050003350dd6000dd2eeeeef0feef0000dd6dddddddddddddeee2eefeeeeeeeee
-9aaf9a99a996d666f999af99000110000000000000011000000d6ddd0505044400000004dddd00ddee2222e0efef0000ddddddddddddd6ddee22eeefeeeeeeee
-eee22efe22eee22ee222eeee22ee22ee22ee22eecccccccccc11cc11cc11cc116666666655555555666000005775555544444444000000000000000000000000
-eee22eef22ee222ee22eee2222ee22ee22ee22ee11111111cc11cc11cc11cc1166666666aaaaaaaa66655d5d5555555544f44f44080008000800080008000800
-eeeeeeef22e222eee22ee22222ee22ee22ee22eecccccccccc11cc11cc11cc11ddddddddd5dd5dd56657557557755555444f4444008080000080800000808000
-22222222eee222eeeeee222eeeeeeeeeeeeeeeeecccccccccccccccccccccccc555555d55dd5d55d5555555d5555555544f44444000800000008000000080000
-22222222fffe2e22ffffee2e22ee22eeeeeeeeeecc11cc11cc11cc1111111111555d55555d5555d557755d55d775555544f4f444008080000080800000808000
-eeeeeeeeeeeffe222eeefffe22ee22eee2e2e2e2cc11cc11cc11cc11c1c1c1c15d55dd5d555d5555555555555d55555544444f44080008000800080008000800
-eeeeeeee2eeeefe22eeeeeef22ee22eee2e2e2e2cc11cc11cc11cc111c1c1c1cd5dd5dd55555555557755555d7755555444fff44000000000000000000000000
-eeeeeeee2eeeeefe2eeeee2eeeeeeeee22222222cccccccccccccccc11111111aaaaaaaa55555555555555555d55d55544f4f444000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 08000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800
 00808000008080000080800000808000008080000080800000808000008080000080800000808000008080000080800000808000008080000080800000808000
@@ -1478,6 +1464,62 @@ eeeeeeee2eeeeefe2eeeee2eeeeeeeee22222222cccccccccccccccc11111111aaaaaaaa55555555
 08000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800080008000800
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000006600000000a000aa666600000a0a0a0000000000000000000a0a0a00090944000104442222000044444444
+0800080008000800080008000800080000000000066660000000a000a0666600000a009a0000000000000000000a009a00090022000104942222000022224222
+008080000080800000808000008080000000000066666d000060a606aaaaaaaaaaaaaaaaaaaaaaaaaaaaa000000a000900040009000104942222000000004000
+0008000000080000000800000008000000000000666d6d0000dddddda0adda000a000a000a000a000a000a00000aa00a00099409000114442222000000004000
+00808000008080000080800000808000000000046d6d6d0000009900a0addaa090a090a090a090a090a090a0000a0a0a00040444000104442222000044444444
+0800080008000800080008000800080000000002dddddd0000009900a0adda0a000a000a000a000a000a000a000a009a00040422000104942222000022224222
+0000000000000000000000000000000000004000d0000d000000aaa099999999999999999999999999999999000a000900010401000104942222000000004000
+0000000000000000000000000000000000004000d0000d00000aa00a00dddd00000990090000000000000000000aa00a00041401000114442222000000004000
+6d66d66d66d5dd506d66d66d66d55550ccccccccccc555556c66c66c66c5555522222222444444444c4444444444444400000000000222220000449900004499
+56556556556d55d06d66d66d66d5555055555555555555556c66c66c66c55555e2e2e2e2949494949c9494949494949400000000002224240000449900004944
+ddddddddddd55550ddddddddddd55550ccccccccccc55555ccccccccccc55555e2e2e2e2949494949c9494949494949422222222222242420000494400004499
+6d66d66d66d555506d66d66d66d555506c66c66c66c555556c66c66c66c5555522222222444444444c4444444444444444444244424244440000449900004449
+6d66d66d66d555506d66d66d66d555506c66c66c66c555556c66c66c66c5555522222222444444444c4444444444767444444444244424240000449900440494
+6d66d66d66d555506d66d66d66d555506c66c66c66c555556c66c66c66c55555e2e2e2e2949494949c9494949494676442444444442244420000444904000049
+ddddddddddd55550ddddddddddd55550ccccccccccc55555ccccccccccc55555e2e2e2e2949494949c9494949494ddd444444424444444240000494400000044
+6d66d66d66d555506d66d66d66d555506c66c66c66c555556c66c66c66c5555522222222444444444c4444444444d4d444444444444444440000449900000004
+0004000400000449000033bb3bb3bbbb0000000333b333bb333b33b30000000000000002000022884444444422222222999999999999999933b3bb3333bbb3bb
+0000404900004444000033b33bbbbbbb0000033b3bbbbbbbbbbbbb300000000200000022000022284442444422222222999999999999999933b33b3b333bb33b
+000404490044449900003bb33b3bbb3b000333bbbbbbbbbbb33b3500000002220000002800002282444444444242424299999999999944993bb3bb333b3bbb33
+000004440444949900003bbb5b3b3b3b0003bb3bbbbb33b33b335000000022280000022200002228424442442444242499999999994999993bb33b3b3b3bbbb3
+000044994449994900003bbb53bb33bb0033b3bbbbb3bb33355000000002228200000228000022284444244444444244999999999994444933b33b3b3333bbb3
+0000444944449999000053b3533bb3bb033b33bb3b33335550000000002288280000228200002288444244422424424499999999999999993bb33b333b33bbb3
+0000094449944499000053bb0533333b3333bbbb33335000000000000228288800002282000022822422242442442424999999999999999933b3bb3333b33b3b
+00004499449999990000053b0053b3333b3bbbbb35500000000000002282888800002228000022282222222244444444999999999999999933b33b3b33bbb33b
+02222222888888882288eee80000000000505000000000000000000000dddd00007766008888888888888888888888888888888888888888760d0006d000706d
+2222222288888888888eeeee000000000005000000000000000000000076dd0007d66dd0022225522222222522555222222222222222252076006006d006006d
+228288828888888882eeeeee0011110000050000000000000005550000066dd0076766d00222ee22222222e22eee2222222222222222e22076000706d0d0006d
+282882288888888888eeeee8001111000050500000aaaa0000500050000006d007d76dd00220022222200e22eee00222222002222220022076000066dd00006d
+88888882888888888eeeee8811111100005050000aaaaaa008688868007006d006d76dd002e002222220022eee2002222220022222e0022076000706d0d0006d
+82888888888888888eee888811111100000500000aaaaaa008886888006776d00aaaa9900ee22222222e22eee2222222222222222e22222076006006d006006d
+88888888888888888888888811111111000500000aa999a00288d88200066d000aaaa9900e22222222e22eee2222222222222222e2222220760d0006d000706d
+888888888888888888888888111111110050500099a9a9a90222222200000000066666d0888888888888888888888888888888888888888876d00006d000066d
+76aaaaaa100000000000000000000000000000000000000c00cc111100c61613000cc111c6161116166166111111111100000000000000006d66d6d00000dc00
+76a5555a00000100000000000006777700000000000000cc00cc1111006c73b3000cc1110c61616667166166111167110000006666000000d6dd6dd00600cd00
+76aaaaaa000000000000c000666767760000000000000cc600cc111100c61b37000cc11100666716666166666116167100006666676600006d6ddd006d60dc00
+76a55a5a00000000000c0c0076767667000007760000cc6100c61116006633730000cc1100076676676666767611676100066d6676776000d6dddd006d6d666d
+76aaaaaa000000000000c00066666166000676670000c616006c617100c631160000cc110000077666767667676677160066d6666dd67600ddddd000dd6d66dd
+76aaa55a00010000000000007667161600676176000cc16100c617160063111300000cc1000000007777677677777677006d6d66d66d6600dddd00006d60cd00
+76aaaaaa0000001000100000637661110c6116160006c111006c111100cc1161000000cc0000000000067777777670000666d666d76d6760dd0000000600dc00
+76d0000d000010000000000036661111cc111166000cc11100cc111100cc16110000000c000000000000000000000000066d66666dd66660000000000000cd00
+007677000000000000000000c00ccc001111113316766716b3333111111111113661111166666666dd66666666666666d6d000006d66d5556d666d666d555555
+7776777700006660000d660050c666c0166176366767617133111111636111113361611166666666ddd666666d66dd66d6d000006d55d6d06d6666655dd6d500
+6c7677760006d660006666600c66ff6c11173677776166161111111166371611333616116666666666dd6666d6dd66d6d50000005d66d6d05d55555d665d0000
+06777760000d66d0066666d0c566fffc111363677611176171111111676671613633676666666666666d66666ddd66d66d0000006d66d5006666d66ddd000000
+0077770000000dd00d6d66000c6f6f6c111633366116171616111111336766163363167766666666666d6666dddddd6d6d0000005d5550006555ddd500000000
+00755700066000000dd6dd0005c6f66c1133b3631616766111111111633677613336116666666666666d6666ddddd6d6d0000000d6d500006d66550000000000
+005775000dd0000000ddd000505cc6c0113b3b36611166111111111137311676111111116666666666d66666dddd6d6d50000000d6d5000055dd000000000000
+000550000000000000000000050ccc001333b3113611111111111111637611111111111166666666dd66666dddddddddd00000005d5000005500000000000000
+004400400000999a999a9aa900000000ccccccccccccccccd999af9a9a9a99aa494f49446d6666666d60d6666666666666666666ff9f9dd9f56666669f9a9a9a
+004444000999a9aa9aa9aaaa00000000ccccccccccccccccdd99faa9aaa9aaaa44ff49446d6d6666ddd6dddddddddddddddddddd9aa9dd9d9566d66699a9a9af
+04444000099a9aaa99aaaaaa00000000cccccccccccccccccdd999afaaaaaaaa444f44945d555555555555555555555555555555aafa9f55559555559f9a9af9
+4f9400000999aa9a9aa9aaaa00000000ccccccccccccccccdddd99f9aaaaa9a944f4f49466666d66dd55d5dddd5dd5ddd5dddddd9f9af99d99666d6df99f9aaa
+99400000099999a9999a9aaa00000000ccccccccccccccccccddd99faa9a9a9944f4f44466d66d66d5d5d5d5ddddd5ddd5555d5da9afa9f9f9dd6d669af9a9fa
+94000000000999999999a9a94f4f4f40cc9caaccccccccccccccdd99a9a9999949444f446666dd66d66d6d6666666d666d66d5559af9aa999dd66d669f9af9af
+44000000000009990999999924242420ccc9aaacccccccccccddddd99999999949f44f9455555d5555555d5555555d556d55d66daf9af9f9f5595d55999f9af9
+40000000000000000099999902222200cccc99cccccccccccccccddd9999999944ff44946d66666d6d66d6666d6666d6550055559aaf9a99a996d666f999af99
 __gff__
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -1516,8 +1558,8 @@ __map__
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __sfx__
 0106000021530215251d5301d5252d0002d0002f0002f0002d0002d0052d0002d00500000000002d0002d0002b0002b0052b0002b00500000000002b0002b0002a0002a0002a0002a000300002f0002d0002b000
-01060000215502b5512b5512b5412b5310d5012900026000215002b5012b5012b5012b5012b50128000240002900024000280000000000000000000000000000000000000000000000000000000000000002d000
 0106000021120211151d1201d1152d000280002d0002f000300002f0002d0002b000290002800000000000000000000000000000000000000000000000000000000000000000000000000000000000000002f000
+01060000215502b5512b5512b5412b5310d5012900026000215002b5012b5012b5012b5012b50128000240002900024000280000000000000000000000000000000000000000000000000000000000000002d000
 010300001c7301c730186043060524600182001830018300184001840018500185001860018600187001870018200182000000000000000000000000000000000000000000000000000000000000000000000000
 010300001873018730000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0106000024540245302b5202b54013630136111360100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
