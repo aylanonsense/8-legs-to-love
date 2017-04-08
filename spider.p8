@@ -28,6 +28,7 @@ local wind_frames
 local wind_dir
 local wind_x
 local wind_y
+local debug_text
 
 
 -- constants
@@ -41,14 +42,28 @@ local levels={
 	-- {30,35,"construction","  0y     c    wy  wy     k    wy  wy     i    wy  wy   +...+  wyssoqsu.+*+*+.mso  wy...+.+*+..wy  wy.+++*+.++.wy  wy.+*.*++*+.wy  wy.+*.**.*+.0y  wy.+.*+.**+.wy  wy.++*+**++.wyg wy..+++++...wyoqssu  ...  msoq  wy          wyaawybbaabbaa awy","platforms"},
 	-- {64,20,"space"," b   b a 8   a  b  a 6 +..a78  b @da..b*++.a.6    .++.a..b.+. 9 a +*b.gefh..* a   *+.i#(#^j...  9 ++bk%#-)n.2  a  .a.m$)[%l.b.   a.4.o^-][p.+*b   +. .qsura..  b b .a. ..b.+.6  a w{y.+*++*+  a   ;:{ b+.+ a      1<0   a bc!  ba a   b         ","space",true},
 	{97,72,"city","                          e            gkkikkkm    . +. . o     c. .*+.++.oawwu %u.+*+.*+.qww(u %u ++*.++ s(((u %u..+.**+.s(((u %%u .*+*+ s((-u %%u.+**+..s([-u %%u ++.*+.s(768 %%u. .+*+.s(@!# %%zy0.+*. s(@!# %%324.+...s(@!# %%324   768(@!# ","wind"},
-	{21,45,"cave","rssqvsqarqvssupaaqqaql  kprssvn  kl kh. ih kqql  mn.if..gf.ijkl  kl.gh..ef.ghmn  in.gf..cd.gfkl  ml.ef..  .efml  kn.ef.+...cdkj  il.ef.+++.  ih  gj.cd.+*++..gf  gh.  .+**++.ef  gh....+***+.cd  cd.++++++++.        .....                      ",nil},
 }
+local tutorial_level={30,35,"construction",
+"                "..
+"                "..
+"                "..
+"                "..
+"                "..
+"                "..
+"                "..
+" mssu      moqu "..
+"  wy        wy  "..
+"  wy        wy  "..
+"  wy        wy  "..
+"  wy        wy  "..
+" msoqsoqssssoqu "..
+"  wy        wy  "..
+"  wy        wy  "}
 local tilesets={
 	-- base_sprite,{solid_bits}
 	city={148,{0,200, 119,119, 238,238, 247,255, 254,255, 240,255, 112,255, 238,238, 238,238, 204,204, 51,51}},
 	garden={172,{240,255, 254,255, 204,204, 204,136, 200,204, 236,255, 204,204, 255,255, 232,254, 255,63, 127,1, 200,254, 200,204, 204,204}},
 	construction={195,{0,0, 0,0, 0,255, 0,255}},
-	cave={158,{255,9, 136,136, 136,136, 204,136, 238,204, 255,239, 254,255}},
 	space={209,{0,0, 0,0, 252,255, 128,254, 200,236, 238,238, 238,238, 206,140, 239,8, 255,207, 255,63, 200,254, 49,247, 127,19, 247,127, 255,102, 238,63}},
 	bridge={236,{19,17, 127,51, 255,63, 63,0, 127,19, 238,142, 255,255, 0,240, 0,0, 0,0, 206,8}}
 }
@@ -83,7 +98,37 @@ local entity_classes={
 		frames_until_spin_web=0,
 		web_uncollision_frames=0,
 		hitstun_frames=0,
+		-- button_left=false,
+		-- button_right=false,
+		-- button_up=false,
+		-- button_down=false,
+		-- button_spin=false,
+		-- button_spin_press=false,
+		instruction_index=1,
+		frames_since_instruction=0,
 		update=function(self)
+			self.button_spin_press=false
+			self.frames_since_instruction=increment_looping_counter(self.frames_since_instruction)
+			if self.instructions then
+				if #self.instructions>self.instruction_index and self.instructions[self.instruction_index]<=self.frames_since_instruction then
+					local instruction=self.instructions[self.instruction_index+1]
+					self.button_left=(char_at(instruction,2)=="a")
+					self.button_right=(char_at(instruction,4)=="d")
+					self.button_up=(char_at(instruction,1)=="w")
+					self.button_down=(char_at(instruction,3)=="s")
+					self.button_spin=(char_at(instruction,5)=="z")
+					self.button_spin_press=(char_at(instruction,6)=="+")
+					self.instruction_index+=2
+					self.frames_since_instruction=0
+				end
+			else
+				self.button_left=btn(0)
+				self.button_right=btn(1)
+				self.button_up=btn(2)
+				self.button_down=btn(3)
+				self.button_spin=btn(4)
+				self.button_spin_press=btnp(4)
+			end
 			-- decrement counters
 			decrement_counter_prop(self,"web_uncollision_frames")
 			decrement_counter_prop(self,"hitstun_frames")
@@ -115,7 +160,7 @@ local entity_classes={
 					self.x+=self.moving_platform.vx
 					self.y+=self.moving_platform.vy
 				end
-				self.vx,self.vy=(btn(1) and 1 or 0)-(btn(0) and 1 or 0),(btn(3) and 1 or 0)-(btn(2) and 1 or 0)
+				self.vx,self.vy=(self.button_right and 1 or 0)-(self.button_left and 1 or 0),(self.button_down and 1 or 0)-(self.button_up and 1 or 0)
 				-- make sure the spider doesn't move faster when moving diagonally
 				if self.vx!=0 and self.vy!=0 then
 					self.vx*=0.7
@@ -145,7 +190,7 @@ local entity_classes={
 				self:finish_spinning_web()
 			end
 			-- the spider places a spun web when z is pressed
-			if self.is_placing_web and btnp(4) then
+			if self.is_placing_web and self.button_spin_press then
 				local web_point=self:spin_web_point(true,false,true)
 				self.spun_strand.from,self.is_placing_web,self.spun_strand=web_point -- ,false,nil
 				if web_point.is_in_freefall and not web_point.has_been_anchored and speed>0.8 then
@@ -153,7 +198,7 @@ local entity_classes={
 				end
 				self:finish_spinning_web()
 			-- the spider starts spinning web when z is pressed
-			elseif not self.is_spinning_web and btnp(4) and self.webbing>0 then
+			elseif not self.is_spinning_web and self.button_spin_press and self.webbing>0 then
 				self.is_spinning_web,self.frames_until_spin_web,self.length_of_spun_web=true,0,0
 				local web_point=self:spin_web_point(true,true,false)
 				self.spun_strand=create_entity("web_strand",{from=self,to=web_point})
@@ -165,7 +210,7 @@ local entity_classes={
 				-- play spinning sound
 				sfx(3,1)
 			-- the spider stops spinning web when z is no longer held or it's been spinning for too long
-			elseif self.is_spinning_web and not btn(4) then
+			elseif self.is_spinning_web and not self.button_spin then
 				self.is_placing_web,self.is_spinning_web=true -- ,false
 				-- stop spinning sound
 				sfx(-1,1)
@@ -304,7 +349,7 @@ local entity_classes={
 			circ(x+c,y-s,1)
 		end,
 		on_death=function(self)
-			spider=create_entity("spider",extract_props(self,{"x","y","respawn_x","respawn_y"}))
+			spider=create_entity("spider",extract_props(self,{"x","y","respawn_x","respawn_y","instructions"}))
 		end
 	},
 	web_point={
@@ -447,10 +492,8 @@ local entity_classes={
 			local species_name=self.species_name
 			local web_point,square_dist=calc_closest_web_point(self.x,self.y,true) -- could be costly to always do
 			if self.is_catchable and web_point and square_dist<64 then
-				self.frames_until_escape,self.caught_web_point,web_point.caught_bug,self.is_catchable=135,web_point,self
-				if species_name=="firefly" then
-					self.frames_until_escape=140
-				elseif species_name=="dragonfly" then
+				self.frames_until_escape,self.caught_web_point,web_point.caught_bug,self.is_catchable=175,web_point,self
+				if species_name=="dragonfly" then
 					self.frames_until_escape*=2
 				end
 			end
@@ -729,14 +772,35 @@ local entity_classes={
 			local tail_mult=(self.vx*self.vx+self.vy*self.vy<0.2 and 0 or 1.5)
 			line(self.x,self.y,self.x-self.vx*tail_mult,self.y-self.vy*tail_mult,1)
 		end
-	}
+	},
+	speech_box={
+		x=8,
+		y=14,
+		characters_per_line=28,
+		characters_shown=0,
+		frames_fully_shown=0,
+		update=function(self)
+			self.characters_shown=min(self.characters_shown+1,#self.text)
+			if self.characters_shown>=#self.text then
+				self.frames_fully_shown=increment_looping_counter(self.frames_fully_shown)
+			end
+		end,
+		draw=function(self)
+			local c,r=self.characters_per_line -- ,nil
+			for r=0,3 do
+				local text=sub(self.text,c*r+r+1,min(self.characters_shown,c*r+r+c))
+				print(text,self.x,self.y+9*r,7)
+			end
+		end
+	},
 }
 
 
 -- main functions
 function _init()
 	init_scene("title")
-	init_scene("game")
+	init_scene("tutorial")
+	-- init_scene("game")
 end
 
 -- local frame_skip=0
@@ -800,6 +864,10 @@ function _draw()
 	-- print("entities: "..#entities,2,110)
 	-- print("memory:   "..flr(stat(0)*(100/1024)).."%",2,116)
 	-- print("cpu:      "..flr(100*stat(1)).."%",2,122)
+	if debug_text then
+		rectfill(0,121,4*#debug_text,128,0)
+		print(debug_text,1,122,8)
+	end
 end
 
 
@@ -815,11 +883,7 @@ function update_title()
 end
 
 function draw_title()
-	-- draw corners
-	spr(12,1,1)
-	spr(12,119,1,1,1,true)
-	spr(12,1,119,1,1,false,true)
-	spr(12,119,119,1,1,true,true)
+	draw_corners()
 	-- draw title
 	sspr(0,0,48,32,40,32)
 	line(73,64,73,80,7)
@@ -830,13 +894,118 @@ function draw_title()
 end
 
 
+-- tutorial functions
+function init_tutorial()
+	-- reset entities, tiles, and variables
+	init_simulation()
+	-- load the tutorial level
+	level=tutorial_level
+	load_tiles(level[4],level[3])
+	-- make schtuff
+	create_entity("spider_respawn",{
+		x=64,
+		y=30,
+		respawn_x=64,
+		respawn_y=97,
+		instructions={
+			60,
+			-- move with arrow keys
+			" a    ",20,
+			"   d  ",40,
+			" a    ",20,
+			"      ",20,
+			-- walk up pillar
+			" a    ",35,
+			"wa    ",10,
+			"w     ",30,
+			"   d  ",10,
+			"      ",90,
+			-- spin web
+			"    z+",40,
+			"      ",90,
+			-- jump to next pillar
+			"   d  ",72,
+			"w  d  ",10,
+			"w     ",30,
+			" a    ",10,
+			"      ",90,
+			-- place end of web
+			"     +",10,
+			"   d  ",10,
+			"      ",250,
+			-- eat bug
+			" a    ",45,
+			"      ",60,
+			-- make a web
+			"  s z+",25,
+			"   d  ",35,
+			"wa   +",45,
+			" as z+",19,
+			"      ",9,
+			"w  d +",31,
+			"  s   ",1,
+			"      "
+		}
+	})
+end
+
+function update_tutorial()
+	-- update all the entities and whatnot
+	update_simulation()
+	if scene_frame==60 then
+		create_entity("speech_box",{
+			text="                            / use the arrow keys to move./",
+			frames_to_death=200
+		})
+	elseif scene_frame==320 then
+		create_entity("speech_box",{
+			text="     hold z to spin web.    /    the longer it's held,   /    the longer the strand.  ",
+			frames_to_death=250
+		})
+	elseif scene_frame==670 then
+		create_entity("speech_box",{
+			text="       tap z again to       /    place the other end     /        of the web.         ",
+			frames_to_death=170
+		})
+	elseif scene_frame==870 then
+		create_entity("speech_box",{
+			text="     catch bugs in your     /     web, then eat them     /      to gain points.       ",
+			frames_to_death=200
+		})
+	elseif scene_frame==920 then
+		create_entity("bug_spawn_flash",{
+			frames_to_death=15,
+			species=1, -- fly
+			x=64,
+			y=56
+		})
+	elseif scene_frame==1120 then
+		create_entity("speech_box",{
+			text="      build a nice web,     /    eat some tasty bugs,    /        and have fun!       "
+		})
+	elseif scene_frame==1350 then
+		transition_to_scene("title")
+	end
+end
+
+function draw_tutorial()
+	draw_corners()
+	camera(0,-8)
+	-- draw the entities and tiles
+	draw_simulation()
+	-- local s="use the arrow keys to move"
+	-- local s="hold z to spin a strand of web. the longer you hold, the longer the strand"
+	-- color(7)
+	-- print(s,64-2*#s,10)
+end
+
 -- game functions
 function init_game()
 	local i
-	-- reset simulation
-	level,score,bugs_eaten,timer,frames_until_spawn_bug,spawns_until_pause=levels[level_num],0,0,140,0,3
-	entities,new_entities,web_points,web_strands,moving_platforms,spider={},{},{},{},{} -- ,nil`
-	-- reset and load tiles
+	-- reset entities, tiles, and variables
+	init_simulation()
+	level,timer,frames_until_spawn_bug,spawns_until_pause=levels[level_num],140,0,3
+	-- load the level
 	load_tiles(level[4],level[3])
 	-- create entities
 	create_entity("level_intro",{respawn_x=level[1],respawn_y=level[2]})
@@ -844,7 +1013,7 @@ function init_game()
 	if level[5]=="platforms" then
 		create_entity("moving_platform",{x=52,y=32})
 	elseif level[5]=="wind" then
-		wind_frames,wind_dir,wind_x,wind_y=100,1,0,0
+		wind_frames,wind_dir,wind_x,wind_y=300,1,0,0
 		for i=1,50 do
 			create_entity("wind_particle",{
 				x=rnd_int(0,128),
@@ -913,82 +1082,14 @@ function update_game()
 			end
 		end
 	end
-	-- update entities
-	foreach(entities,function(entity)
-		-- call the entity's update function
-		entity:update()
-		-- do some default update stuff
-		entity.frames_alive=increment_looping_counter(entity.frames_alive)
-		if entity.frames_to_death>0 and decrement_counter_prop(entity,"frames_to_death") then
-			entity:die()
-		end
-	end)
-	-- add new entities to the game
-	add_new_entities_to_game()
-	-- remove dead entities from the game
-	filter_entity_list(entities)
-	filter_entity_list(web_strands)
-	filter_entity_list(web_points)
-	filter_entity_list(moving_platforms)
-	-- sort entities for rendering
-	sort_list(entities,function(a,b)
-		return a.render_layer>b.render_layer
-	end)
+	-- update all the entities and whatnot
+	update_simulation()
 end
 
 function draw_game()
 	camera(0,-8)
-	-- render layers:
-	--  1=bg effects
-	--  2=background
-	--  tiles
-	--  3=moving platforms
-	--  4=web
-	--  5=midground
-	--  6=projectiles
-	--  7=spider
-	--  8=foreground
-	--  9=ui effects
-	local j,t,i=#entities+1,min(timer,135) -- ,nil
-	-- draw background entities
-	for i=1,#entities do
-		if entities[i].render_layer>2 then
-			j=i
-			break
-		end
-		entities[i]:draw()
-	end
-	-- draw the level
-	foreach(tiles,function(tile)
-		if tile then
-			spr(tile.sprite,8*tile.col-8,8*tile.row-8,1,1,tile.is_flipped)
-			-- uncomment to see terrain "hitboxes"
-			-- if scene_frame%16<8 then
-			-- 	local x=8*tile.col-8
-			-- 	local y=8*tile.row-8
-			-- 	local x2
-			-- 	for x2=0,3 do
-			-- 		local y2
-			-- 		for y2=0,3 do
-			-- 			local bit=1+x2+4*y2
-			-- 			local should_draw
-			-- 			if bit>8 then
-			-- 				should_draw=band(2^(bit-9),tile.solid_bits[2])>0
-			-- 			else
-			-- 				should_draw=band(2^(bit-1),tile.solid_bits[1])>0
-			-- 			end
-			-- 			if should_draw then
-			-- 				rectfill(x+2*x2,y+2*y2,x+2*x2+1,y+2*y2+1,7)
-			-- 			end
-			-- 		end
-			-- 	end
-			-- end
-		end
-	end)
-	-- draw foreground entities
-	for i=j,#entities do
-		entities[i].draw(entities[i])
-	end
+	-- draw the entities and tiles
+	draw_simulation()
 	-- draw ui
 	camera()
 	rectfill(0,0,127,7,0)
@@ -1004,6 +1105,7 @@ function draw_game()
 	else
 		color(7)
 	end
+	local t=min(timer,135)
 	print(flr(t/60)..":"..(t%60<10 and "0" or "")..t%60,112,2)
 	-- draw score
 	print(score_cumulative+score<=0 and "0" or (score_cumulative+score).."0",1,2,7)
@@ -1061,6 +1163,98 @@ function draw_scoring()
 end
 
 
+-- simulation functions
+function init_simulation()
+	local i
+	-- reset some vars
+	score,bugs_eaten=0,0
+	-- reset entities
+	entities,new_entities,web_points,web_strands,moving_platforms,spider={},{},{},{},{} -- ,nil`
+	-- reset tiles
+	reset_tiles()
+end
+
+function update_simulation()
+	-- update entities
+	foreach(entities,function(entity)
+		-- call the entity's update function
+		entity:update()
+		-- do some default update stuff
+		entity.frames_alive=increment_looping_counter(entity.frames_alive)
+		if entity.frames_to_death>0 and decrement_counter_prop(entity,"frames_to_death") then
+			entity:die()
+		end
+	end)
+	-- add new entities to the game
+	add_new_entities_to_game()
+	-- remove dead entities from the game
+	filter_entity_list(entities)
+	filter_entity_list(web_strands)
+	filter_entity_list(web_points)
+	filter_entity_list(moving_platforms)
+	-- sort entities for rendering
+	sort_list(entities,function(a,b)
+		return a.render_layer>b.render_layer
+	end)
+end
+
+function draw_simulation()
+	-- render layers:
+	--  1=bg effects
+	--  2=background
+	--  tiles
+	--  3=moving platforms
+	--  4=web
+	--  5=midground
+	--  6=projectiles
+	--  7=spider
+	--  8=foreground
+	--  9=ui effects
+	local i,j
+	-- draw background entities
+	for i=1,#entities do
+		if entities[i].render_layer>2 then
+			j=i
+			break
+		end
+		entities[i]:draw()
+	end
+	-- draw the level
+	foreach(tiles,function(tile)
+		if tile then
+			spr(tile.sprite,8*tile.col-8,8*tile.row-8,1,1,tile.is_flipped)
+			-- uncomment to see terrain "hitboxes"
+			-- if scene_frame%16<8 then
+			-- 	local x=8*tile.col-8
+			-- 	local y=8*tile.row-8
+			-- 	local x2
+			-- 	for x2=0,3 do
+			-- 		local y2
+			-- 		for y2=0,3 do
+			-- 			local bit=1+x2+4*y2
+			-- 			local should_draw
+			-- 			if bit>8 then
+			-- 				should_draw=band(2^(bit-9),tile.solid_bits[2])>0
+			-- 			else
+			-- 				should_draw=band(2^(bit-1),tile.solid_bits[1])>0
+			-- 			end
+			-- 			if should_draw then
+			-- 				rectfill(x+2*x2,y+2*y2,x+2*x2+1,y+2*y2+1,7)
+			-- 			end
+			-- 		end
+			-- 	end
+			-- end
+		end
+	end)
+	-- draw foreground entities
+	if j then
+		for i=j,#entities do
+			entities[i].draw(entities[i])
+		end
+	end
+end
+
+
 -- entity functions
 function create_entity(class_name,args)
 	-- create default entity
@@ -1109,13 +1303,16 @@ end
 
 
 -- tile functions
-function load_tiles(map,tileset_name)
-	local i,c,r
-	-- reset tiles
+function reset_tiles()
+	local i
 	tiles,level_spawn_points={},{{},{},{}}
 	for i=1,240 do
 		tiles[i]=false
 	end
+end
+
+function load_tiles(map,tileset_name)
+	local i,c,r
 	-- loop through the 2d array of symbols
 	for c=1,16 do
 		for r=1,15 do
@@ -1315,9 +1512,25 @@ end
 -- helper functions
 function noop() end
 
+function draw_corners()
+	-- draw corners
+	spr(12,1,1)
+	spr(12,119,1,1,1,true)
+	spr(12,1,119,1,1,false,true)
+	spr(12,119,119,1,1,true,true)
+end
+
+function char_at(s,n)
+	return sub(s,n,n)
+end
+
 function init_scene(s)
 	scene,scene_frame=s,0
 	scenes[scene][1]()
+end
+
+function debug_print(s)
+	debug_text="\"" .. s .. "\""
 end
 
 function transition_to_scene(s)
@@ -1382,32 +1595,37 @@ function extract_props(obj,props_names)
 	return props
 end
 
+function get_char_at(str,i)
+	-- TODO
+end
+
 
 -- set up the scenes now that the functions are defined
 scenes={
 	title={init_title,update_title,draw_title},
+	tutorial={init_tutorial,update_tutorial,draw_tutorial},
 	game={init_game,update_game,draw_game},
 	scoring={init_scoring,update_scoring,draw_scoring}
 }
 
 
 __gfx__
-00000000000000000000007000000000000000000000000000000000000000000000000000000000000000000000000011011111000070000000700000007000
-00000077770000000000070700000000000000000000000008000800080008000800080008000800080008000800080010100010000777000007770000077700
-000077700d7700000000070700000000000000000000000000808000008080000080800000808000008080000080800001111100070777070007770707077700
-00077600000770000500070700000000000000000000000000080000000800000008000000080000000800000008000010100000007777700777777000777777
-00777000000070005050770700000000000000000000000000808000008080000080800000808000008080000080800010100000000777000007770000077700
-007650000000d700d000776000000000000000000000000008000800080008000800080008000800080008000800080010100000007171700771717000717177
-00670000000007000ddd770000007770007700777dd0000000000000000000000000000000000000000000000000000011000000070707070007070707070700
-0077d00000000700000077000007007007070700000d000000000000000000000000000000000000000000000000000010000000000000000000000000000000
-0077700000000700076070007007770070070077000d000000000000000000000000000000000000000000000000000007770070000000000000000000000000
-0007770000007000700770060707000d7007000070d0000008000800080008000800080008000800080008000800080007007777077707000777007007770700
-000777700005700007770677700077700777077700d0000000808000008080000080800000808000008080000080800007007070077777000777770707777700
-0000777775d6000000005500000000000007d000000ddd0000080000000800000008000000080000000800000008000000777700077777770777777007777777
-00000777777000000050000000070000007700000ddd0d0000808000008080000080800000808000008080000080800000707000007771700077717000777170
-0000dd777777600000055ddd000700000707ddddd000d00008000800080008000800080008000800080008000800080007770000077717070777170700771707
-000666d777767700000000007dd77dddd7d700000000000000000000000000000000000000000000000000000000000070700000000770000007700007077000
-00777500777767700000000707070077077000005000000000000000000000000000000000000000000000000000000007770000000707000007070000700700
+00000000000000000000007000000000000000000000000066666665666666666666666500000000000000000000000011011111000070000000700000007000
+0000007777000000000007070000000000000000000000006dddddd56777777d6dd77dd508000800080008000800080010100010000777000007770000077700
+000077700d770000000007070000000000000000000000006d7777d56666676d6d7dd7d500808000008080000080800001111100070777070007770707077700
+0007760000077000050007070000000000000000000000006ddd7dd56666766d6d7d77d500080000000800000008000010100000007777700777777000777777
+0077700000007000505077070000000000000000000000006dd7ddd56667666d6d77d7d500808000008080000080800010100000000777000007770000077700
+007650000000d700d00077600000000000000000000000006d7777d56676666d6d7dd7d508000800080008000800080010100000007171700771717000717177
+00670000000007000ddd770000007770007700777dd000006dddddd56777777d6dd77dd500000000000000000000000011000000070707070007070707070700
+0077d00000000700000077000007007007070700000d0000555555556ddddddd5555555500000000000000000000000010000000000000000000000000000000
+0077700000000700076070007007770070070077000d000006666660066666600000000000000000000000000000000007770070000000000000000000000000
+0007770000007000700770060707000d7007000070d0000066ddddd566ddddd50800080008000800080008000800080007007777077707000777007007770700
+000777700005700007770677700077700777077700d000006d7777d56dd77dd50080800000808000008080000080800007007070077777000777770707777700
+0000777775d6000000005500000000000007d000000ddd006ddd7dd56d7dd7d50008000000080000000800000008000000777700077777770777777007777777
+00000777777000000050000000070000007700000ddd0d006dd7ddd56d7dd7d50080800000808000008080000080800000707000007771700077717000777170
+0000dd777777600000055ddd000700000707ddddd000d0006d7777d56dd77dd50800080008000800080008000800080007770000077717070777170700771707
+000666d777767700000000007dd77dddd7d70000000000006dddddd56dddddd50000000000000000000000000000000070700000000770000007700007077000
+00777500777767700000000707070077077000005000000005555550055555500000000000000000000000000000000007770000000707000007070000700700
 07770000077776770000000707070570700000550000000000000000000000000000000000000000000000000000000077707000000000000000000000000000
 d7700000007776676005000707007007dddddd000000000008000800080008000800080008000800080008000800080070077700007000700007070000700070
 77700077660777667050507707000000000000000000000000808000008080000080800000808000008080000080800070070000000707000007070000070700
@@ -1475,7 +1693,7 @@ d7700000007776676005000707007007dddddd000000000008000800080008000800080008000800
 6d66d66d66d5dd506d66d66d66d55550ccccccccccc555556c66c66c66c5555522222222444444444c4444444444444400000000000222220000449900004499
 56556556556d55d06d66d66d66d5555055555555555555556c66c66c66c55555e2e2e2e2949494949c9494949494949400000000002224240000449900004944
 ddddddddddd55550ddddddddddd55550ccccccccccc55555ccccccccccc55555e2e2e2e2949494949c9494949494949422222222222242420000494400004499
-6d66d66d66d555506d66d66d66d555506c66c66c66c555556c66c66c66c5555522222222444444444c4444444444444444444244424244440000449900004449
+6d66d66d66d555506d66d66d66d555506c66c66c66c555556c66c66c66c555552222222244444444ccc444444444444444444244424244440000449900004449
 6d66d66d66d555506d66d66d66d555506c66c66c66c555556c66c66c66c5555522222222444444444c4444444444767444444444244424240000449900440494
 6d66d66d66d555506d66d66d66d555506c66c66c66c555556c66c66c66c55555e2e2e2e2949494949c9494949494676442444444442244420000444904000049
 ddddddddddd55550ddddddddddd55550ccccccccccc55555ccccccccccc55555e2e2e2e2949494949c9494949494ddd444444424444444240000494400000044
