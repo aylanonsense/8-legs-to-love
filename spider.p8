@@ -29,6 +29,7 @@ local wind_dir
 local wind_x
 local wind_y
 local debug_text
+local menu_buttons
 
 
 -- constants
@@ -37,28 +38,13 @@ local tile_flip_matrix={8,4,2,1,128,64,32,16}
 local scenes={}
 local levels={
 	-- spawn_x,spawn_y,tileset,tiles,hazard,has_bottom
-	-- {20,75,"garden","m##n        vrqn !@      vtr #$n !@  qsu   vr#$n !@qsu  . . o#@n opp  . .+. m!@ i86l .+.*.+. !@ e666j .+*+ ..!@ e669f.+*..+. !@ g666f..+*+. .!@ e686f.+.*+.. op e666f +*+.. w%^xe669h.+.+. y-(((g866j . .. 0((((c544daaaaaac44542233222222322323",nil,true},
-	-- {27,51,"bridge","wxwx        mwxwxwxn          yi ymwl. .   .okz kyi  .*+*+.kxwxl y .+.+.++.. jz  z  . .. .    y 444424476555555300000eg..hf11111000eg. . ..hf111!0c ..+**+. .d1@80a.+++*+*++ b19#!  +++.++.+  @$#8   . . ..   9$#vssssssssssqsu$vssssssssssssssu","river"},
-	-- {30,35,"construction","  0y     c    wy  wy     k    wy  wy     i    wy  wy   +...+  wyssoqsu.+*+*+.mso  wy...+.+*+..wy  wy.+++*+.++.wy  wy.+*.*++*+.wy  wy.+*.**.*+.0y  wy.+.*+.**+.wy  wy.++*+**++.wyg wy..+++++...wyoqssu  ...  msoq  wy          wyaawybbaabbaa awy","platforms"},
-	-- {64,20,"space"," b   b a 8   a  b  a 6 +..a78  b @da..b*++.a.6    .++.a..b.+. 9 a +*b.gefh..* a   *+.i#(#^j...  9 ++bk%#-)n.2  a  .a.m$)[%l.b.   a.4.o^-][p.+*b   +. .qsura..  b b .a. ..b.+.6  a w{y.+*++*+  a   ;:{ b+.+ a      1<0   a bc!  ba a   b         ","space",true},
+	{20,75,"garden","m##n        vrqn !@      vtr #$n !@  qsu   vr#$n !@qsu  . . o#@n opp  . .+. m!@ i86l .+.*.+. !@ e666j .+*+ ..!@ e669f.+*..+. !@ g666f..+*+. .!@ e686f.+.*+.. op e666f +*+.. w%^xe669h.+.+. y-(((g866j . .. 0((((c544daaaaaac44542233222222322323",nil,true},
+	{27,51,"bridge","wxwx        mwxwxwxn          yi ymwl. .   .okz kyi  .*+*+.kxwxl y .+.+.++.. jz  z  . .. .    y 444424476555555300000eg..hf11111000eg. . ..hf111!0c ..+**+. .d1@80a.+++*+*++ b19#!  +++.++.+  @$#8   . . ..   9$#vssssssssssqsu$vssssssssssssssu","river"},
+	{30,35,"construction","  0y     c    wy  wy     k    wy  wy     i    wy  wy   +...+  wyssoqsu.+*+*+.mso  wy...+.+*+..wy  wy.+++*+.++.wy  wy.+*.*++*+.wy  wy.+*.**.*+.0y  wy.+.*+.**+.wy  wy.++*+**++.wyg wy..+++++...wyoqssu  ...  msoq  wy          wyaawybbaabbaa awy","platforms"},
 	{97,72,"city","                          e            gkkikkkm    . +. . o     c. .*+.++.oawwu %u.+*+.*+.qww(u %u ++*.++ s(((u %u..+.**+.s(((u %%u .*+*+ s((-u %%u.+**+..s([-u %%u ++.*+.s(768 %%u. .+*+.s(@!# %%zy0.+*. s(@!# %%324.+...s(@!# %%324   768(@!# ","wind"},
+	{64,20,"space"," b   b a 8   a  b  a 6 +..a78  b @da..b*++.a.6    .++.a..b.+. 9 a +*b.gefh..* a   *+.i#(#^j...  9 ++bk%#-)n.2  a  .a.m$)[%l.b.   a.4.o^-][p.+*b   +. .qsura..  b b .a. ..b.+.6  a w{y.+*++*+  a   ;:{ b+.+ a      1<0   a bc!  ba a   b         ","space",true},
 }
-local tutorial_level={30,35,"construction",
-"                "..
-"                "..
-"                "..
-"                "..
-"                "..
-"                "..
-"                "..
-" mssu      moqu "..
-"  wy        wy  "..
-"  wy        wy  "..
-"  wy        wy  "..
-"  wy        wy  "..
-" msoqsoqssssoqu "..
-"  wy        wy  "..
-"  wy        wy  "}
+local tutorial_level={30,35,"construction","                                                                                                                 mssu      moqu   wy        wy    wy        wy    wy        wy    wy        wy   msoqsoqssssoqu   wy        wy    wy        wy  "}
 local tilesets={
 	-- base_sprite,{solid_bits}
 	city={148,{0,200, 119,119, 238,238, 247,255, 254,255, 240,255, 112,255, 238,238, 238,238, 204,204, 51,51}},
@@ -696,16 +682,17 @@ local entity_classes={
 	level_intro={
 		x=63,
 		y=28,
-		frames_to_death=108,
+		frames_to_death=139,
 		draw=function(self)
-			if self.frames_alive>=28 then
-				local colors,j,i={1,5,13,6,7},mid(flr(self.frames_alive/4-6),1,flr(28-self.frames_alive/4))
+			local f=self.frames_alive-40
+			if f>2 then
+				local colors,j,i={1,5,13,6,7},mid(flr(f/4),1,flr(25-f/4)) -- ,nil
 				for i=j,#colors do
 					pal(colors[i],colors[j])
 				end
 				spr(103,44,18)
-				sspr(56,56,32,8,44,26)
-				spr(103+level_num,74,25)
+				sspr(56,56,32,8,43,26)
+				spr(103+level_num,75,25)
 				pal()
 			end
 		end,
@@ -766,7 +753,7 @@ local entity_classes={
 			self.vx,self.vy=self.vx*0.96+0.01*wind_dir,self.vy*0.96
 			self.x+=self.vx*self.move_scale
 			self.y+=self.vy*self.move_scale
-			self.x,self.y=wrap_number(self.x,-10,138),wrap_number(self.y,-10,130)
+			self.x,self.y=wrap_number(-10,self.x,138),wrap_number(-10,self.y,130)
 		end,
 		draw=function(self)
 			local tail_mult=(self.vx*self.vx+self.vy*self.vy<0.2 and 0 or 1.5)
@@ -793,14 +780,87 @@ local entity_classes={
 			end
 		end
 	},
+	buttons={
+		-- frozen=false,
+		button_index=1,
+		init=function(self)
+			self.button_entities={}
+			local i
+			for i=1,#self.buttons do
+				add(self.button_entities,create_entity("button",{
+					text=self.buttons[i],
+					y=self.y-16+16*i
+				}))
+			end
+			self.button_entities[self.button_index].is_highlighted=true
+		end,
+		update=function(self)
+			-- scroll up and down through the buttons
+			if (btnp(2) or btnp(3)) and not self.frozen then
+				self.button_entities[self.button_index].is_highlighted=false
+				self.button_index=wrap_number(1,self.button_index + (btnp(3) and 1 or 0) - (btnp(2) and 1 or 0),#self.button_entities)
+				self.button_entities[self.button_index].is_highlighted=true
+			end
+		end,
+		select=function(self)
+			if not self.frozen then
+				self.frozen=true
+				self.button_entities[self.button_index].blink_frames=2
+			end
+		end
+	},
+	button={
+		-- is_highlighted=false,
+		blink_frames=0,
+		update=function(self)
+			decrement_counter_prop(self,"blink_frames")
+		end,
+		draw=function(self)
+			if self.blink_frames<=0 then
+				color(7)
+				local y,d,d2=self.y,0,0
+				if self.is_highlighted then
+					line(11,y+11,116,y+11,5)
+					color(7)
+					spr(60,57,y-4)
+					spr(60,62,y-4,1,1,true)
+					spr(61,57,y+7)
+					spr(61,62,y+7,1,1,true)
+					d2=7
+				else
+					colorwash(13)
+					d=2
+				end
+				line(15,y,63-d2,y)
+				line(63+d2,y,112,y)
+				line(15,y+10,63-d2,y+10)
+				line(63+d2,y+10,112,y+10)
+				spr(28,7+d,y-1)
+				spr(28,7+d,y+4,1,1,false,true)
+				spr(28,113-d,y-1,1,1,true)
+				spr(28,113-d,y+4,1,1,true,true)
+				print(self.text,64-2*#self.text,y+3)
+				pal()
+			end
+		end
+	},
+	game_event_text={
+		render_layer=3,
+		x=63,
+		y=26,
+		frames_to_death=100,
+		draw=function(self)
+			color(({7,6,5,1})[mid(1,flr(self.frames_alive/4-20),4)])
+			local wiggle=self.frames_alive<4 and 2*(self.frames_alive%2)-1 or 0
+			print(self.text,self.x+wiggle-2*#self.text,self.y)
+		end
+	}
 }
 
 
 -- main functions
 function _init()
 	init_scene("title")
-	init_scene("tutorial")
-	-- init_scene("game")
 end
 
 -- local frame_skip=0
@@ -872,25 +932,56 @@ end
 
 
 -- title functions
-function init_title()
-	level_num,score_cumulative=1,0
-end
-
 function update_title()
-	if btnp(4) and scene_frame>15 then
-		transition_to_scene("game")
+	if btnp(4) and scene_frame>7 then
+		init_scene("menu")
 	end
 end
 
 function draw_title()
 	draw_corners()
-	-- draw title
-	sspr(0,0,48,32,40,32)
-	line(73,64,73,80,7)
-	spr(13,69,81)
+	sspr(0,0,48,32,40,26)
+	line(73,58,73,74,7)
+	spr(13,69,75)
 	if scene_frame%30<20 then
-		print("press z to start",32,106,7)
+		print("press z to start",32,100,7)
 	end
+end
+
+
+-- menu functions
+function init_menu()
+	init_simulation()
+	menu_buttons=create_entity("buttons",{
+		y=46,
+		buttons={"play game","how to play","level select","survival mode"}
+	})
+end
+
+function update_menu()
+	update_simulation()
+	if btnp(4) and scene_frame>7 then
+		menu_buttons:select()
+		local button_index=menu_buttons.button_index
+		-- play game
+		if button_index==1 then
+			level_num,score_cumulative=1,0
+			transition_to_scene("game")
+		-- how to play
+		elseif button_index==2 then
+			transition_to_scene("tutorial")
+		-- level select
+		elseif button_index==3 then
+		-- survival mode
+		elseif button_index==4 then
+		end
+	end
+end
+
+function draw_menu()
+	draw_corners()
+	print("press z to select an option",10,26,7)
+	draw_simulation()
 end
 
 
@@ -901,89 +992,89 @@ function init_tutorial()
 	-- load the tutorial level
 	level=tutorial_level
 	load_tiles(level[4],level[3])
-	-- make schtuff
-	create_entity("spider_respawn",{
-		x=64,
-		y=30,
-		respawn_x=64,
-		respawn_y=97,
-		instructions={
-			60,
-			-- move with arrow keys
-			" a    ",20,
-			"   d  ",40,
-			" a    ",20,
-			"      ",20,
-			-- walk up pillar
-			" a    ",35,
-			"wa    ",10,
-			"w     ",30,
-			"   d  ",10,
-			"      ",90,
-			-- spin web
-			"    z+",40,
-			"      ",90,
-			-- jump to next pillar
-			"   d  ",72,
-			"w  d  ",10,
-			"w     ",30,
-			" a    ",10,
-			"      ",90,
-			-- place end of web
-			"     +",10,
-			"   d  ",10,
-			"      ",250,
-			-- eat bug
-			" a    ",45,
-			"      ",60,
-			-- make a web
-			"  s z+",25,
-			"   d  ",35,
-			"wa   +",45,
-			" as z+",19,
-			"      ",9,
-			"w  d +",31,
-			"  s   ",1,
-			"      "
-		}
-	})
 end
 
 function update_tutorial()
 	-- update all the entities and whatnot
 	update_simulation()
-	if scene_frame==60 then
+	if scene_frame==45 then
+		create_entity("spider_respawn",{
+			x=64,
+			y=30,
+			respawn_x=64,
+			respawn_y=97,
+			instructions={
+				60,
+				-- move with arrow keys
+				" a    ",20,
+				"   d  ",40,
+				" a    ",20,
+				"      ",20,
+				-- walk up pillar
+				" a    ",35,
+				"wa    ",10,
+				"w     ",30,
+				"   d  ",10,
+				"      ",90,
+				-- spin web
+				"    z+",40,
+				"      ",90,
+				-- jump to next pillar
+				"   d  ",72,
+				"w  d  ",10,
+				"w     ",30,
+				" a    ",10,
+				"      ",90,
+				-- place end of web
+				"     +",10,
+				"   d  ",10,
+				"      ",250,
+				-- eat bug
+				" a    ",45,
+				"      ",60,
+				-- make a web
+				"  s z+",25,
+				"   d  ",35,
+				"wa   +",45,
+				" as z+",19,
+				"      ",9,
+				"w  d +",31,
+				"  s   ",1,
+				"      "
+			}
+		})
+	elseif scene_frame==105 then
 		create_entity("speech_box",{
 			text="                            / use the arrow keys to move./",
 			frames_to_death=200
 		})
-	elseif scene_frame==320 then
+	elseif scene_frame==365 then
 		create_entity("speech_box",{
 			text="     hold z to spin web.    /    the longer it's held,   /    the longer the strand.  ",
 			frames_to_death=250
 		})
-	elseif scene_frame==670 then
+	elseif scene_frame==715 then
 		create_entity("speech_box",{
 			text="       tap z again to       /    place the other end     /        of the web.         ",
 			frames_to_death=170
 		})
-	elseif scene_frame==870 then
+	elseif scene_frame==915 then
 		create_entity("speech_box",{
 			text="     catch bugs in your     /     web, then eat them     /      to gain points.       ",
 			frames_to_death=200
 		})
-	elseif scene_frame==920 then
+	elseif scene_frame==965 then
 		create_entity("bug_spawn_flash",{
 			frames_to_death=15,
 			species=1, -- fly
 			x=64,
 			y=56
 		})
-	elseif scene_frame==1120 then
+	elseif scene_frame==1165 then
 		create_entity("speech_box",{
 			text="      build a nice web,     /    eat some tasty bugs,    /        and have fun!       "
 		})
-	elseif scene_frame==1350 then
+	elseif scene_frame==1425 then
 		transition_to_scene("title")
 	end
 end
@@ -1004,7 +1095,7 @@ function init_game()
 	local i
 	-- reset entities, tiles, and variables
 	init_simulation()
-	level,timer,frames_until_spawn_bug,spawns_until_pause=levels[level_num],140,0,3
+	level,timer,frames_until_spawn_bug,spawns_until_pause=levels[level_num],141,0,3
 	-- load the level
 	load_tiles(level[4],level[3])
 	-- create entities
@@ -1029,6 +1120,12 @@ function update_game()
 	if scene_frame%30==0 then
 		if timer<=0 then
 			transition_to_scene("scoring")
+		elseif timer==131 then
+			create_entity("game_event_text",{text="build a web!"})
+		elseif timer==101 then
+			create_entity("game_event_text",{text="10 seconds!"})	
+		elseif timer==92 then
+			create_entity("game_event_text",{text="catch bugs!"})	
 		end
 		timer=decrement_counter(timer)
 	end
@@ -1425,7 +1522,7 @@ function ceil(n)
 	return -flr(-n)
 end
 
-function wrap_number(n,min,max)
+function wrap_number(min,n,max)
 	return n<min and max or (n>max and min or n)
 end
 
@@ -1530,7 +1627,7 @@ function init_scene(s)
 end
 
 function debug_print(s)
-	debug_text="\"" .. s .. "\""
+	debug_text="> " .. s
 end
 
 function transition_to_scene(s)
@@ -1596,13 +1693,14 @@ function extract_props(obj,props_names)
 end
 
 function get_char_at(str,i)
-	-- TODO
+	-- todo
 end
 
 
 -- set up the scenes now that the functions are defined
 scenes={
-	title={init_title,update_title,draw_title},
+	title={noop,update_title,draw_title},
+	menu={init_menu,update_menu,draw_menu},
 	tutorial={init_tutorial,update_tutorial,draw_tutorial},
 	game={init_game,update_game,draw_game},
 	scoring={init_scoring,update_scoring,draw_scoring}
@@ -1610,14 +1708,14 @@ scenes={
 
 
 __gfx__
-00000000000000000000007000000000000000000000000066666665666666666666666500000000000000000000000011011111000070000000700000007000
-0000007777000000000007070000000000000000000000006dddddd56777777d6dd77dd508000800080008000800080010100010000777000007770000077700
-000077700d770000000007070000000000000000000000006d7777d56666676d6d7dd7d500808000008080000080800001111100070777070007770707077700
-0007760000077000050007070000000000000000000000006ddd7dd56666766d6d7d77d500080000000800000008000010100000007777700777777000777777
-0077700000007000505077070000000000000000000000006dd7ddd56667666d6d77d7d500808000008080000080800010100000000777000007770000077700
-007650000000d700d00077600000000000000000000000006d7777d56676666d6d7dd7d508000800080008000800080010100000007171700771717000717177
-00670000000007000ddd770000007770007700777dd000006dddddd56777777d6dd77dd500000000000000000000000011000000070707070007070707070700
-0077d00000000700000077000007007007070700000d0000555555556ddddddd5555555500000000000000000000000010000000000000000000000000000000
+000000000000000000000070000000000000000000000000666666656666666666666665000000000000000000000000dd0ddddd000070000000700000007000
+0000007777000000000007070000000000000000000000006dddddd56777777d6dd77dd5080008000800080008000800d0d000d0000777000007770000077700
+000077700d770000000007070000000000000000000000006d7777d56666676d6d7dd7d50080800000808000008080000ddddd00070777070007770707077700
+0007760000077000050007070000000000000000000000006ddd7dd56666766d6d7d77d5000800000008000000080000d0d00000007777700777777000777777
+0077700000007000505077070000000000000000000000006dd7ddd56667666d6d77d7d5008080000080800000808000d0d00000000777000007770000077700
+007650000000d700d00077600000000000000000000000006d7777d56676666d6d7dd7d5080008000800080008000800d0d00000007171700771717000717177
+00670000000007000ddd770000007770007700777dd000006dddddd56777777d6dd77dd5000000000000000000000000dd000000070707070007070707070700
+0077d00000000700000077000007007007070700000d0000555555556ddddddd55555555000000000000000000000000d0000000000000000000000000000000
 0077700000000700076070007007770070070077000d000006666660066666600000000000000000000000000000000007770070000000000000000000000000
 0007770000007000700770060707000d7007000070d0000066ddddd566ddddd50800080008000800080008000800080007007777077707000777007007770700
 000777700005700007770677700077700777077700d000006d7777d56dd77dd50080800000808000008080000080800007007070077777000777770707777700
@@ -1659,13 +1757,13 @@ d7700000007776676005000707007007dddddd000000000008000800080008000800080008000800
 00000000000000000080800000808000827282000202020002020200000007000007000000770070000000000000000000000000000000000000000000000000
 00000000000000000000000000000000087800000000000000000000000000000007000007000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000020022000000000000000000000000700000777700000777000000077000777770000777000000000000000000
-00000000000000000000000000000000000066020004440000006602000000000006700007706770007007700007077000700000007700700800080008000800
-00000000000000000099900000999000009942400092442200999602000000000077700007000770006007700077077000777000077000000080800000808000
-70aa070000aa000022aaa22022aaa22009aa444009a4420009aaa424000000000007700000000760000077000076077000007700077077000008000000080000
-0a44a0000a44a0007a444a700a444a0009aa424009aaa96009aaa444000000700007700000007700000007700070077000700770077700700080800000808000
-0944900079449700092429006924296009aaa90209aaa96009aaa424000007070007700000077000007007700077777007700770077007700800080008000800
-00000000000000000044400070444070009996020099900000999602000007070007700000770000007777700000077007777770007777700000000000000000
-00000000000000000400040004000400000000000000000000006602050007070007700007777770000777000000077000777700000777000000000000000000
+00000000000000000000000000000000000066020004440000006602000000000006700007706770007007700007077000700000007600700800080008000800
+00000000000000000099900000999000009942400092442200999602000000000077700007000670006007600077077000777000077000000080800000808000
+70aa070000aa000022aaa22022aaa22009aa444009a4420009aaa424000000000007700000000760000077000076077000006700077077000008000000080000
+0a44a0000a44a0007a444a700a444a0009aa424009aaa96009aaa444000000700007700000007700000007700070077000600770077600700080800000808000
+0944900079449700092429006924296009aaa90209aaa96009aaa424000007070007700000077000007007700077777007700770077006700800080008000800
+00000000000000000044400070444070009996020099900000999602000007070007700000770060007777600000067007777770007777700000000000000000
+00000000000000000400040004000400000000000000000000006602050007070007700007777770000777000000077000777600000777000000000000000000
 00000000000000000500050005000500000000000000000000000000505077070000000000000000000700000000000000000000000000000000000000000000
 005050000050500070aaa07000aaa00000d5a000066a5a0000500d00d00077600000000000000000007070000800080008000800080008000800080008000800
 075a5700005a5000675a5760005a5000005aaa00566a5aa05aa505500ddd7700000077707007d077707070000080800000808000008080000080800000808000
