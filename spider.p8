@@ -37,17 +37,16 @@ local is_story_mode
 
 
 -- constants
-local tile_symbols="abcdefghijklmnopqrstuvwxyz0123456789!@#$%^()-=[]{}:;<>/?`~"
 local tile_flip_matrix={8,4,2,1,128,64,32,16}
 local scenes={}
 local levels={
-	-- spawn_x,spawn_y,tileset,tiles,hazard,has_bottom
-	{20,75,"garden","m##n        vrqn !@      vtr #$n !@  qsu   vr#$n !@qsu  . . o#@n opp  . .+. m!@ i86l .+.*.+. !@ e666j .+*+ ..!@ e669f.+*..+. !@ g666f..+*+. .!@ e686f.+.*+.. op e666f +*+.. w%^xe669h.+.+. y-(((g866j . .. 0((((c544daaaaaac44542233222222322323",nil,true},
-	{75,107,"house","       $00#            $00#            $00#            $00#          ..)88(.mo      .+. . . .ksp!!!%.++.++.+.kul000# +.*+**+.kul000#.+*+.+*+.cwd888(.++*+.++ e0f   ..+*+.+*+.gyh    ++..++++.qyr     .ab ... i0j    444444444444    246324632643","paintings"},
-	{27,51,"bridge","wxwx        mwxwxwxn          yi ymwl. .   .okz kyi  .*+*+.kxwxl y .+.+.++.. jz  z  . .. .    y 444424476555555300000eg..hf11111000eg. . ..hf111!0c ..+**+. .d1@80a.+++*+*++ b19#!  +++.++.+  @$#8   . . ..   9$#vssssssssssqsu$vssssssssssssssu","river"},
-	{30,35,"construction","  0y     c    wy  wy     k    wy  wy     i    wy  wy   +...+  wyssoqsu.+*+*+.mso  wy...+.+*+..wy  wy.+++*+.++.wy  wy.+*.*++*+.wy  wy.+*.**.*+.0y  wy.+.*+.**+.wy  wy.++*+**++.wyg wy..+++++...wyoqssu  ...  msoq  wy          wyaawybbaabbaa awy","platforms"},
-	{14,72,"skyscrapers","                          e            gkkikkkm    . +. . o     c. .*+.++.oawwu %u.+*+.*+.qww(u %u ++*.++ s(((u %u..+.**+.s(((u %%u .*+*+ s((-u %%u.+**+..s([-u %%u ++.*+.s(768 %%u. .+*+.s(@!# %%zy0.+*. s(@!# %%324.+...s(@!# %%324   768(@!# ","wind"},
-	{64,20,"world"," b   b a 8   a  b  a 6 +..a78  b @da..b*++.a.6    .++.a..b.+. 9 a +*b.gefh..* a   *+.i#(#^j...  9 ++bk%#-)n.2  a  .a.m$)[%l.b.   a.4.o^-][p.+*b   +. .qsura..  b b .a. ..b.+.6  a w{y.+*++*+  a   ;:{ b+.+ a      1<0   a bc!  ba a   b         ","space",true}
+	-- spawn_x,spawn_y,tileset,tiles,has_bottom
+	{20,75,"garden","m##n        vrqn !@      vtr #$n !@  qsu   vr#$n !@qsu  . . o#@n opp  . .+. m!@ i86l .+.*.+. !@ e666j .+*+ ..!@ e669f.+*..+. !@ g666f..+*+. .!@ e686f.+.*+.. op e666f +*+.. w%^xe669h.+.+. y-(((g866j . .. 0((((c544daaaaaac44542233222222322323",true},
+	{75,107,"house","       $00#            $00#            $00#            $00#          ..)88(.mo      .+. . . .ksp!!!%.++.++.+.kul000# +.*+**+.kul000#.+*+.+*+.cwd888(.++*+.++ e0f   ..+*+.+*+.gyh    ++..++++.qyr     .ab ... i0j    444444444444    246324632643"},
+	{27,51,"bridge","wxwx        mwxwxwxn          yi ymwl. .   .okz kyi  .*+*+.kxwxl y .+.+.++.. jz  z  . .. .    y 444424476555555300000eg..hf11111000eg. . ..hf111!0c ..+**+. .d1@80a.+++*+*++ b19#!  +++.++.+  @$#8   . . ..   9$#vssssssssssqsu$vssssssssssssssu"},
+	{30,35,"construction","  0y     c    wy  wy     k    wy  wy     i    wy  wy   +...+  wyssoqsu.+*+*+.mso  wy...+.+*+..wy  wy.+++*+.++.wy  wy.+*.*++*+.wy  wy.+*.**.*+.0y  wy.+.*+.**+.wy  wy.++*+**++.wyg wy..+++++...wyoqssu  ...  msoq  wy          wyaawybbaabbaa awy"},
+	{14,72,"skyscrapers","                          e            gkkikkkm    . +. . o     c. .*+.++.oawwu %u.+*+.*+.qww(u %u ++*.++ s(((u %u..+.**+.s(((u %%u .*+*+ s((-u %%u.+**+..s([-u %%u ++.*+.s(768 %%u. .+*+.s(@!# %%zy0.+*. s(@!# %%324.+...s(@!# %%324   768(@!# "},
+	{64,20,"world"," b   b a 8   a  b  a 6 +..a78  b @da..b*++.a.6    .++.a..b.+. 9 a +*b.gefh..* a   *+.i#(#^j...  9 ++bk%#-)n.2  a  .a.m$)[%l.b.   a.4.o^-][p.+*b   +. .qsura..  b b .a. ..b.+.6  a w{y.+*++*+  a   ;:{ b+.+ a      1<0   a bc!  ba a   b         ",true}
 }
 local tutorial_level={30,35,"construction","                                                                                                                 mssu      moqu   wy        wy    wy        wy    wy        wy    wy        wy   msoqsoqssssoqu   wy        wy    wy        wy  "}
 local tilesets={
@@ -65,7 +64,7 @@ local bug_species={
 	{"beetle",80,{8,13,2,1},3,180},
 	{"hornet",112,{10,9,5,1},4,240,true},
 	{"firefly",96,{9,4,2,1},5,120},
-	{"dragonfly",73,{11,3,5,1},5,320,true},
+	{"dragonfly",73,{11,3,5,1},5,320},
 	{"happyfly",105,{14,13,2,1},2,240,true},
 	{"butterfly",89,{7,6,5,1},10,180,true}
 }
@@ -106,27 +105,16 @@ local entity_classes={
 			end
 		end,
 		update=function(self)
-			self.button_spin_press=false
-			self.frames_since_instruction=increment_looping_counter(self.frames_since_instruction)
+			self.frames_since_instruction,self.button_spin_press=increment_looping_counter(self.frames_since_instruction) -- ,false
 			if self.instructions then
 				if #self.instructions>self.instruction_index and self.instructions[self.instruction_index]<=self.frames_since_instruction then
 					local instruction=self.instructions[self.instruction_index+1]
-					self.button_left=(char_at(instruction,2)=="a")
-					self.button_right=(char_at(instruction,4)=="d")
-					self.button_up=(char_at(instruction,1)=="w")
-					self.button_down=(char_at(instruction,3)=="s")
-					self.button_spin=(char_at(instruction,5)=="z")
-					self.button_spin_press=(char_at(instruction,6)=="+")
+					self.button_left,self.button_right,self.button_up,self.button_down,self.button_spin,self.button_spin_press=(char_at(instruction,2)=="a"),(char_at(instruction,4)=="d"),(char_at(instruction,1)=="w"),(char_at(instruction,3)=="s"),(char_at(instruction,5)=="z"),(char_at(instruction,6)=="+")
 					self.instruction_index+=2
 					self.frames_since_instruction=0
 				end
 			else
-				self.button_left=btn(0)
-				self.button_right=btn(1)
-				self.button_up=btn(2)
-				self.button_down=btn(3)
-				self.button_spin=btn(4)
-				self.button_spin_press=btnp(4)
+				self.button_left,self.button_right,self.button_up,self.button_down,self.button_spin,self.button_spin_press=btn(0),btn(1),btn(2),btn(3),btn(4),btnp(4)
 			end
 			-- decrement counters
 			decrement_counter_prop(self,"web_uncollision_frames")
@@ -226,13 +214,13 @@ local entity_classes={
 			-- the spider stays in bounds
 			self.x=mid(4,self.x,123)
 			-- the spider can fall off the bottom of bottomless levels
-			if level[5]=="river" then
+			if level[3]=="bridge" then
 				if self.y>110 and not self.is_on_tile then
 					create_entity("splash",extract_props(self,{"x","y"}))
 					self:die()
 				end
 			else
-				self.y=(self.is_on_tile or level[6]) and mid(2,self.y,116) or max(2,self.y)
+				self.y=(self.is_on_tile or level[5]) and mid(2,self.y,116) or max(2,self.y)
 				if self.y>=130 then
 					self:die()
 				end
@@ -319,16 +307,14 @@ local entity_classes={
 			end
 		end,
 		draw=function(self)
-			local x,y,f,a,s=self.x,self.y,self.frames_to_death -- ,nil,nil
-			if self.radius<15 then
+			local x,y,f,r,s,a=self.x,self.y,self.frames_to_death,self.radius,8 -- ,nil,nil
+			if r<15 then
 				s=20
-			elseif self.radius<30 then
+			elseif r<30 then
 				s=12
-			else
-				s=8
 			end
 			for a=0,360,s do
-				pset(x+self.radius*cos((a+self.frames_alive)/360),y+self.radius*sin((a+self.frames_alive)/360),7)
+				pset(x+r*cos((a+self.frames_alive)/360),y+r*sin((a+self.frames_alive)/360),7)
 			end
 		end
 	},
@@ -356,7 +342,6 @@ local entity_classes={
 		vx_strands=0,
 		vy_strands=0,
 		mass=1,
-		-- is_soaked=false,
 		-- has_strands_attached=false,
 		-- caught_bug=nil,
 		-- moving_platform=nil,
@@ -366,7 +351,7 @@ local entity_classes={
 		update=function(self)
 			if self.is_in_freefall then
 				self.mass=1
-				if level[5]=="river" and self.y>=110 then
+				if level[3]=="bridge" and self.y>=110 then
 					self.mass=2.5
 				end
 				apply_gravity(self,0.02,0.02,0.01)
@@ -440,7 +425,7 @@ local entity_classes={
 		end,
 		draw=function(self)
 			color(({8,8,9,15,7})[ceil(1+4*self.percent_elasticity_remaining)])
-			if level[5]=="river" then
+			if level[3]=="bridge" then
 				if self.from.y>=115 and self.to.y>=115 then
 					color(13)
 				elseif self.from.y>=110 and self.to.y>=110 then
@@ -480,6 +465,7 @@ local entity_classes={
 				self[v]=bug_species[self.species][k]
 			end
 			create_entity("spawn_ring",{target=self})
+			sfx(7,3)
 		end,
 		update=function(self)
 			local species_name=self.species_name
@@ -556,11 +542,11 @@ local entity_classes={
 					end
 				elseif self.is_consumable then
 					local props=extract_props(self,{"colors","x","y"})
-					props.text="+"..self.points.."0"
+					props.text,spider.webbing="+"..self.points.."0",min(spider.webbing+1,spider.max_webbing)
 					create_entity("floating_points",props)
 					score+=self.points
 					bugs_eaten+=1
-					spider.webbing=min(spider.webbing+1,spider.max_webbing)
+					sfx(6,2)
 					self:die()
 				end
 			end
@@ -568,7 +554,7 @@ local entity_classes={
 		draw=function(self)
 			-- draw tri rings
 			if self.species_name=="hornet" and self.is_catchable and not self.caught_web_point then
-				local f,i=self.frames_alive/50
+				local f,i=self.frames_alive/50 -- ,nil
 				for i=1,5 do
 					line(self.x+7*cos(f+i/3),self.y+7*sin(f+i/3),self.x+7*cos(f+(i+1)/3),self.y+7*sin(f+(i+1)/3),8)
 				end
@@ -662,11 +648,7 @@ local entity_classes={
 		draw=function(self)
 			local x,y,f=self.x+rnd(2)-1,self.y+rnd(2)-1,flr(self.frames_alive)
 			local r=9+1.8*f-f*f/20
-			if f>=12 then
-				color(1)
-			else
-				color(7-flr(f/4))
-			end
+			color(f>=12 and 1 or 7-flr(f/4))
 			if f<16 then
 				circfill(x,y,r)
 			else
@@ -762,9 +744,6 @@ local entity_classes={
 	},
 	wind_particle={
 		render_layer=1,
-		init=function(self)
-			self.is_truth=rnd_int(0,1)
-		end,
 		update=function(self)
 			self.vx+=wind_x/20
 			self.vy+=wind_y/20
@@ -789,7 +768,7 @@ local entity_classes={
 			if self.characters_shown>=#self.text then
 				self.frames_fully_shown=increment_looping_counter(self.frames_fully_shown)
 			else
-				local c=sub(self.text,self.characters_shown,self.characters_shown)
+				local c=char_at(self.text,self.characters_shown)
 				if c!=" " and c!="/" then
 					sfx(4,3)
 				end
@@ -827,18 +806,16 @@ local entity_classes={
 		end,
 		select=function(self)
 			if not self.frozen then
-				self.frozen=true
-				self.button_entities[self.button_index].blink_frames=2
+				self.frozen,self.button_entities[self.button_index].blink_frames=true,2
 			end
 		end
 	},
 	button={
 		-- is_highlighted=false,
 		blink_frames=0,
-		update=function(self)
-			decrement_counter_prop(self,"blink_frames")
-		end,
 		draw=function(self)
+			-- it's fine to decrement this counter in the draw method, since it's draw related
+			decrement_counter_prop(self,"blink_frames")
 			if self.blink_frames<=0 then
 				color(7)
 				local y,d,d2=self.y,0,0
@@ -880,7 +857,7 @@ local entity_classes={
 	painting1={
 		render_layer=3,
 		draw=function(self)
-			sspr(56,32,16,32,64,0)
+			sspr(56,32,16,32,64) -- ,0
 		end
 	},
 	painting2={
@@ -897,7 +874,6 @@ local entity_classes={
 			self.vy=mid(-2,self.vy+(btn(3) and 0.01 or 0)-(btn(2) and 0.01 or 0),2)
 			self.x+=self.vx
 			self.y=mid(20,self.y+self.vy,100)
-			self.y=mid(-20,self.y,148)
 			if self.x>130 then
 				self:die()
 			end
@@ -905,9 +881,7 @@ local entity_classes={
 		draw=function(self)
 			local i=1+flr(self.frames_alive/10)%8
 			local frame=({13,29,45,29,13,29,45,29})[i]
-			local flipped_x=({true,false,false,false,false,true,true,true})[i]
-			local flipped_y=({false,false,false,true,true,true,true,false})[i]
-			spr(frame,self.x-3.5,self.y-3.5,1,1,flipped_x,flipped_y)
+			spr(frame,self.x-3.5,self.y-3.5,1,1,i==1 or i>5,i>3 and i<8)
 		end,
 		on_death=function()
 			spider=nil
@@ -916,20 +890,16 @@ local entity_classes={
 	galaxy={
 		x=-1,
 		y=-1,
-		speed=1,
 		init=function(self)
-			self.dist=rnd(5)+rnd(12)*rnd(12)
-			self.angle=rnd(360)
-			self.speed=10/self.dist
-			self.color=({7,10,9,12,13,13,1})[mid(1,flr(self.dist/5),7)]--7--rnd_int(1,15)
+			self.dist,self.angle=rnd(5)+rnd(12)*rnd(12),rnd(360)
+			self.speed,self.color=10/self.dist,({7,10,9,12,13,13,1})[mid(1,flr(self.dist/5),7)]
 			if rnd(1)<0.1 then
 				self.color=({3,7,10,14})[rnd_int(1,4)]
 			end
 		end,
 		update=function(self)
 			self.angle+=self.speed
-			self.x=64+self.dist*cos(self.angle/360)
-			self.y=80+self.dist*sin(self.angle/360)/3
+			self.x,self.y=64+self.dist*cos(self.angle/360),80+self.dist*sin(self.angle/360)/3
 			if spider and spider.is_alive and calc_square_dist(self.x,self.y,spider.x,spider.y)<9 then
 				local props=extract_props(self,{"colors","x","y"})
 				create_entity("floating_points",{
@@ -940,6 +910,7 @@ local entity_classes={
 				})
 				score+=1
 				bugs_eaten+=1
+				sfx(6,2)
 				self:die()
 			end
 		end,
@@ -968,7 +939,6 @@ function _update()
 		transition_frames_left=decrement_counter(transition_frames_left)
 		if transition_frames_left==30 then
 			init_scene(next_scene)
-			next_scene=nil
 		end
 	end
 	scene_frame=increment_looping_counter(scene_frame)
@@ -1019,6 +989,7 @@ function _draw()
 	-- print("entities: "..#entities,2,110)
 	-- print("memory:   "..flr(stat(0)*(100/1024)).."%",2,116)
 	-- print("cpu:      "..flr(100*stat(1)).."%",2,122)
+	-- draw debug text
 	-- if debug_text then
 	-- 	rectfill(0,121,4*#debug_text,128,0)
 	-- 	print(debug_text,1,122,8)
@@ -1029,6 +1000,7 @@ end
 -- title functions
 function update_title()
 	if btnp(4) and transition_frames_left<5 then
+		sfx(5,0)
 		transition_to_scene("menu")
 	end
 end
@@ -1073,7 +1045,9 @@ function update_menu()
 			elseif button_index==4 then
 				init_scene("credits")
 			end
+			sfx(button_index<3 and 5 or 4,0)
 		elseif btnp(5) then
+			sfx(5,0)
 			transition_to_scene("title")
 		end
 	end
@@ -1098,6 +1072,7 @@ end
 function update_tutorial()
 	-- update all the entities and whatnot
 	update_simulation()
+	local speech_text,speech_frames
 	if scene_frame==45 then
 		create_entity("spider_respawn",{
 			x=64,
@@ -1145,25 +1120,13 @@ function update_tutorial()
 			}
 		})
 	elseif scene_frame==105 then
-		create_entity("speech_box",{
-			text="                            / use the arrow keys to move./",
-			frames_to_death=200
-		})
+		speech_text,speech_frames="                            / use the arrow keys to move./",200
 	elseif scene_frame==365 then
-		create_entity("speech_box",{
-			text="     hold z to spin web.    /    the longer it's held,   /    the longer the strand.  ",
-			frames_to_death=250
-		})
+		speech_text,speech_frames="     hold z to spin web.    /    the longer it's held,   /    the longer the strand.  ",250
 	elseif scene_frame==715 then
-		create_entity("speech_box",{
-			text="       tap z again to       /    place the other end     /        of the web.         ",
-			frames_to_death=170
-		})
+		speech_text,speech_frames="       tap z again to       /    place the other end     /        of the web.         ",170
 	elseif scene_frame==915 then
-		create_entity("speech_box",{
-			text="     catch bugs in your     /     web, then eat them     /      to gain points.       ",
-			frames_to_death=200
-		})
+		speech_text,speech_frames="     catch bugs in your     /     web, then eat them     /      to gain points.       ",200
 	elseif scene_frame==965 then
 		create_entity("bug_spawn_flash",{
 			frames_to_death=15,
@@ -1172,11 +1135,15 @@ function update_tutorial()
 			y=56
 		})
 	elseif scene_frame==1165 then
-		create_entity("speech_box",{
-			text="      build a nice web,     /    eat some tasty bugs,    /        and have fun!       "
-		})
+		speech_text,speech_frames="      build a nice web,     /    eat some tasty bugs,    /        and have fun!       ",500
 	elseif scene_frame==1415 then
 		transition_to_scene("title")
+	end
+	if speech_text then
+		create_entity("speech_box",{
+			text=speech_text,
+			frames_to_death=speech_frames
+		})
 	end
 end
 
@@ -1207,8 +1174,10 @@ function update_level_select()
 		if btnp(4) then
 			menu_buttons:select()
 			level_num,score_cumulative,is_story_mode=menu_buttons.button_index,0 -- ,false
+			sfx(5,0)
 			transition_to_scene("game")
 		elseif btnp(5) then
+			sfx(4,0)
 			init_scene("menu")
 		end
 	end
@@ -1240,9 +1209,9 @@ function init_game()
 		y=level_num==6 and 30 or 46
 	})
 	-- spider=create_entity("spider",{x=level[1],y=level[2],respawn_x=level[1],respawn_y=level[2]})
-	if level[5]=="platforms" then
+	if level[3]=="construction" then
 		create_entity("moving_platform",{x=52,y=32})
-	elseif level[5]=="wind" then
+	elseif level[3]=="skyscrapers" then
 		wind_frames,wind_dir,wind_x,wind_y=300,1,0,0
 		for i=1,50 do
 			create_entity("wind_particle",{
@@ -1251,7 +1220,7 @@ function init_game()
 				move_scale=0.25+rnd(0.75)
 			})
 		end
-	elseif level[5]=="paintings" then
+	elseif level[3]=="house" then
 		create_entity("painting1",{})
 		create_entity("painting2",{})
 	end
@@ -1313,7 +1282,7 @@ function update_game()
 		end
 	end
 	-- update the wind
-	if level[5]=="wind" then
+	if level[3]=="skyscrapers" then
 		wind_frames=decrement_counter(wind_frames)
 		if wind_frames<=0 then
 			if wind_x==0 and wind_y==0 then
@@ -1369,8 +1338,10 @@ function update_scoring()
 	local final_frame=74+bugs_eaten+score
 	if scene_frame>15 and btnp(4) then
 		if scene_frame<final_frame then
+			sfx(4,0)
 			scene_frame=final_frame+30
 		elseif transition_frames_left<=0 then
+			sfx(5,0)
 			if not is_story_mode or level_num<0 then
 				transition_to_scene("title")
 			elseif level_num<#levels then
@@ -1388,7 +1359,7 @@ function draw_scoring()
 	color(7)
 	print("level complete!",35,24)
 	line(35,30,92,30)
-	local f,score_text=scene_frame-40
+	local f,score_text=scene_frame-40 -- ,nil
 	-- draw number of bugs eaten
 	local b=mid(0,f,bugs_eaten)
 	if f>0 then
@@ -1426,6 +1397,7 @@ end
 -- credits functions
 function update_credits()
 	if scene_frame>7 and (btnp(4) or btnp(5)) then
+		sfx(4,0)
 		init_scene("menu")
 	end
 end
@@ -1479,11 +1451,8 @@ end
 
 -- simulation functions
 function init_simulation()
-	local i
 	-- reset some vars
-	score,bugs_eaten=0,0
-	-- reset entities
-	entities,new_entities,web_points,web_strands,moving_platforms,spider={},{},{},{},{} -- ,nil`
+	score,bugs_eaten,entities,new_entities,web_points,web_strands,moving_platforms,spider=0,0,{},{},{},{},{} -- ,nil`
 	-- reset tiles
 	reset_tiles()
 end
@@ -1507,9 +1476,14 @@ function update_simulation()
 	filter_entity_list(web_points)
 	filter_entity_list(moving_platforms)
 	-- sort entities for rendering
-	sort_list(entities,function(a,b)
-		return a.render_layer>b.render_layer
-	end)
+	local i,j
+	for i=1,#entities do
+		j=i
+		while j>1 and entities[j-1].render_layer>entities[j].render_layer do
+			entities[j],entities[j-1]=entities[j-1],entities[j]
+			j-=1
+		end
+	end
 end
 
 function draw_simulation()
@@ -1646,10 +1620,10 @@ function load_tiles(map,tileset_name)
 	for c=1,16 do
 		for r=1,15 do
 			local tile_coords,s,tile_index,i={c,r},r*16+c-16
-			local symbol=sub(map,s,s)
+			local symbol,tile_symbols=char_at(map,s),"abcdefghijklmnopqrstuvwxyz0123456789!@#$%^()-=[]{}:;<>/?`~"
 			-- find the tile index of the symbol
 			for i=1,#tile_symbols do
-				if symbol==sub(tile_symbols,i,i) then
+				if symbol==char_at(tile_symbols,i) then
 					tile_index=i
 					break
 				end
@@ -1729,7 +1703,7 @@ end
 -- math functions
 function apply_gravity(entity,grav,space_grav,wind_mag)
 	-- some levels have space gravity
-	if level[5]=="space" then
+	if level[3]=="world" then
 		local square_dist,x,y=calc_square_dist(entity.x,entity.y,63,55),create_vector(63-entity.x,55-entity.y,space_grav)
 		if square_dist>576 then
 			entity.vx+=x
@@ -1740,7 +1714,7 @@ function apply_gravity(entity,grav,space_grav,wind_mag)
 		entity.vy+=grav
 	end
 	-- apply wind
-	if level[5]=="wind" then
+	if level[3]=="skyscrapers" then
 		entity.vx+=wind_mag*wind_x
 		entity.vy+=wind_mag*wind_y
 	end
@@ -1830,7 +1804,7 @@ function calc_closest_spot_on_web(x,y,allow_unanchored)
 		if not from_obj.is_being_spun and not to_obj.is_being_spun and
 			(allow_unanchored or (from_obj.has_been_anchored and to_obj.has_been_anchored)) then
 			local x2,y2=calc_closest_point_on_line(from_obj.x,from_obj.y,to_obj.x,to_obj.y,x,y)
-			if x2!=nil and y2!=nil then
+			if x2 and y2 then
 				local square_dist=calc_square_dist(x,y,x2,y2)
 				if square_dist>=0 and (not closest_square_dist or square_dist<closest_square_dist) then
 					closest_x,closest_y,closest_square_dist=x2,y2,square_dist
@@ -1858,7 +1832,7 @@ function char_at(s,n)
 end
 
 function init_scene(s)
-	scene,scene_frame=s,0
+	scene,scene_frame,next_scene=s,0 -- ,nil
 	scenes[scene][1]()
 end
 
@@ -1894,17 +1868,6 @@ function colorwash(c)
 	local i
 	for i=1,15 do
 		pal(i,c)
-	end
-end
-
-function sort_list(list,func)
-	local i
-	for i=1,#list do
-		local j=i
-		while j>1 and func(list[j-1],list[j]) do
-			list[j],list[j-1]=list[j-1],list[j]
-			j-=1
-		end
 	end
 end
 
@@ -2113,7 +2076,7 @@ __sfx__
 011800000c1400e1411014111141131411514117141181411a1411c1411d1411f1412114123141241412614128141291412b1412d1412f1413014132101341010000000000000000000000000000000000000000
 010c00001c15024101181010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 010400001856000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+01100000180761c0761f0461f0261f016000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 010c0000185551c5551f5501f55000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 010600000c2200c2210c2110c21100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 011000003065024631186210c61100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
