@@ -31,9 +31,9 @@ local wind_frames
 local wind_dir
 local wind_x
 local wind_y
-local debug_text
 local menu_buttons
 local is_story_mode
+-- local debug_text
 
 
 -- constants
@@ -46,8 +46,8 @@ local levels={
 	{75,107,"house","       $00#            $00#            $00#            $00#          ..)88(.mo      .+. . . .ksp!!!%.++.++.+.kul000# +.*+**+.kul000#.+*+.+*+.cwd888(.++*+.++ e0f   ..+*+.+*+.gyh    ++..++++.qyr     .ab ... i0j    444444444444    246324632643","paintings"},
 	{27,51,"bridge","wxwx        mwxwxwxn          yi ymwl. .   .okz kyi  .*+*+.kxwxl y .+.+.++.. jz  z  . .. .    y 444424476555555300000eg..hf11111000eg. . ..hf111!0c ..+**+. .d1@80a.+++*+*++ b19#!  +++.++.+  @$#8   . . ..   9$#vssssssssssqsu$vssssssssssssssu","river"},
 	{30,35,"construction","  0y     c    wy  wy     k    wy  wy     i    wy  wy   +...+  wyssoqsu.+*+*+.mso  wy...+.+*+..wy  wy.+++*+.++.wy  wy.+*.*++*+.wy  wy.+*.**.*+.0y  wy.+.*+.**+.wy  wy.++*+**++.wyg wy..+++++...wyoqssu  ...  msoq  wy          wyaawybbaabbaa awy","platforms"},
-	{97,72,"skyscrapers","                          e            gkkikkkm    . +. . o     c. .*+.++.oawwu %u.+*+.*+.qww(u %u ++*.++ s(((u %u..+.**+.s(((u %%u .*+*+ s((-u %%u.+**+..s([-u %%u ++.*+.s(768 %%u. .+*+.s(@!# %%zy0.+*. s(@!# %%324.+...s(@!# %%324   768(@!# ","wind"},
-	{64,20,"space"," b   b a 8   a  b  a 6 +..a78  b @da..b*++.a.6    .++.a..b.+. 9 a +*b.gefh..* a   *+.i#(#^j...  9 ++bk%#-)n.2  a  .a.m$)[%l.b.   a.4.o^-][p.+*b   +. .qsura..  b b .a. ..b.+.6  a w{y.+*++*+  a   ;:{ b+.+ a      1<0   a bc!  ba a   b         ","space",true}
+	{14,72,"skyscrapers","                          e            gkkikkkm    . +. . o     c. .*+.++.oawwu %u.+*+.*+.qww(u %u ++*.++ s(((u %u..+.**+.s(((u %%u .*+*+ s((-u %%u.+**+..s([-u %%u ++.*+.s(768 %%u. .+*+.s(@!# %%zy0.+*. s(@!# %%324.+...s(@!# %%324   768(@!# ","wind"},
+	{64,20,"world"," b   b a 8   a  b  a 6 +..a78  b @da..b*++.a.6    .++.a..b.+. 9 a +*b.gefh..* a   *+.i#(#^j...  9 ++bk%#-)n.2  a  .a.m$)[%l.b.   a.4.o^-][p.+*b   +. .qsura..  b b .a. ..b.+.6  a w{y.+*++*+  a   ;:{ b+.+ a      1<0   a bc!  ba a   b         ","space",true}
 }
 local tutorial_level={30,35,"construction","                                                                                                                 mssu      moqu   wy        wy    wy        wy    wy        wy    wy        wy   msoqsoqssssoqu   wy        wy    wy        wy  "}
 local tilesets={
@@ -57,15 +57,17 @@ local tilesets={
 	bridge={236,{19,17, 127,51, 255,63, 63,0, 127,19, 238,142, 255,255, 0,240, 0,0, 0,0, 206,8}},
 	construction={195,{0,0, 0,0, 0,255, 0,255}},
 	skyscrapers={148,{0,200, 119,119, 238,238, 247,255, 254,255, 240,255, 112,255, 238,238, 238,238, 204,204, 51,51}},
-	space={209,{0,0, 0,0, 252,255, 128,254, 200,236, 238,238, 238,238, 206,140, 239,8, 255,207, 255,63, 200,254, 49,247, 127,19, 247,127, 255,102, 238,63}},
+	world={209,{0,0, 0,0, 252,255, 128,254, 200,236, 238,238, 238,238, 206,140, 239,8, 255,207, 255,63, 200,254, 49,247, 127,19, 247,127, 255,102, 238,63}},
 }
 local bug_species={
-	-- species_name,base_sprite,colors,points,wiggles
-	{"fly",64,{12,13,5,1},1,true},
-	{"beetle",80,{8,13,2,1},2},
-	{"firefly",96,{9,4,2,1},3},
-	{"hornet",112,{10,9,5,1},5,true},
-	{"dragonfly",73,{11,3,5,1},5,true}
+	-- species_name,base_sprite,colors,points,escape_time,wiggles
+	{"fly",64,{12,13,5,1},1,240,true},
+	{"beetle",80,{8,13,2,1},3,180},
+	{"hornet",112,{10,9,5,1},4,240,true},
+	{"firefly",96,{9,4,2,1},5,120},
+	{"dragonfly",73,{11,3,5,1},5,320,true},
+	{"happyfly",105,{14,13,2,1},2,240,true},
+	{"butterfly",89,{7,6,5,1},10,180,true}
 }
 local entity_classes={
 	spider={
@@ -454,7 +456,10 @@ local entity_classes={
 		draw=function(self)
 			if self.frames_to_death<=15 then
 				colorwash(bug_species[self.species][3][1])
-				spr(44-ceil(self.frames_to_death/3),self.x-3,self.y-4)
+				if bug_species[self.species][1]=="butterfly" then
+					colorwash(({8,9,10,11,12,14})[1+flr(self.frames_alive/2)%6])
+				end
+				spr(126-ceil(self.frames_to_death/3),self.x-3,self.y-4)
 				pal()
 			end
 		end,
@@ -465,35 +470,36 @@ local entity_classes={
 	bug={
 		render_layer=2,
 		-- is_catchable=false,
+		-- is_consumable=false
 		-- caught_web_point=nil,
 		frames_until_escape=0,
 		vy=0.35,
 		init=function(self)
 			local k,v
-			for k,v in pairs({"species_name","base_sprite","colors","points","wiggles"}) do
+			for k,v in pairs({"species_name","base_sprite","colors","points","escape_frames","wiggles"}) do
 				self[v]=bug_species[self.species][k]
 			end
 			create_entity("spawn_ring",{target=self})
 		end,
 		update=function(self)
+			local species_name=self.species_name
 			-- bugs move downwards while spawning
 			if self.frames_alive<45 then
 				self.vy*=0.95
+			end
 			-- bugs become catchable after spawning
+			if self.frames_alive==35 and species_name!="hornet" then
+				self.is_consumable=true
 			elseif self.frames_alive==45 then
-				self.render_layer,self.is_catchable,self.vy=5,true,0
+				self.render_layer,self.vy,self.is_catchable=5,0,true
 			-- bugs escape after a pause
 			elseif self.frames_alive>80 and self.is_catchable then
 				self:escape()
 			end
 			-- bugs can be caught in webs
-			local species_name=self.species_name
 			local web_point,square_dist=calc_closest_web_point(self.x,self.y,true) -- could be costly to always do
-			if self.is_catchable and web_point and square_dist<64 then
-				self.frames_until_escape,self.caught_web_point,web_point.caught_bug,self.is_catchable=175,web_point,self
-				if species_name=="dragonfly" then
-					self.frames_until_escape*=2
-				end
+			if self.is_catchable and web_point and square_dist<36 then
+				self.frames_until_escape,self.caught_web_point,web_point.caught_bug,self.is_consumable,self.is_catchable=self.escape_frames,web_point,self,true -- ,false
 			end
 			-- bugs escape webs in time or if they break
 			if self.frames_until_escape>0 and self.caught_web_point then
@@ -548,7 +554,7 @@ local entity_classes={
 						spider.hitstun_frames,spider.vy=25,1.5
 						spider.vx*=0.5
 					end
-				elseif self.is_catchable or self.caught_web_point then
+				elseif self.is_consumable then
 					local props=extract_props(self,{"colors","x","y"})
 					props.text="+"..self.points.."0"
 					create_entity("floating_points",props)
@@ -601,7 +607,7 @@ local entity_classes={
 				end
 				self.caught_web_point.caught_bug,self.caught_web_point=nil -- ,nil
 			end
-			self.render_layer,self.frames_to_death,self.vy,self.is_catchable=8,12,-1.5 -- ,false
+			self.render_layer,self.frames_to_death,self.vy,self.is_catchable,self.is_consumable=8,12,-1.5 -- ,false,false
 		end,
 		on_death=function(self)
 			if self.caught_web_point then
@@ -670,12 +676,13 @@ local entity_classes={
 	},
 	floating_points={
 		render_layer=9,
-		frames_to_death=20,
+		frames_to_death=34,
 		update=function(self)
 			self.y-=0.5
 		end,
 		draw=function(self)
-			print(self.text,self.x-2*#self.text,self.y-2,self.colors[max(1,flr(self.frames_alive/2-5))])
+			print(self.text,self.x-2*#self.text,self.y-2,self.colors[max(1,flr(self.frames_alive/2-11))])
+			pal()
 		end
 	},
 	spawn_ring={
@@ -693,7 +700,6 @@ local entity_classes={
 	},
 	level_intro={
 		x=59,
-		y=47,
 		frames_to_death=139,
 		draw=function(self)
 			local f=self.frames_alive-40
@@ -702,9 +708,9 @@ local entity_classes={
 				for i=j,#colors do
 					pal(colors[i],colors[j])
 				end
-				spr(38,44,18+16)
-				sspr(48,24,32,8,43,26+16)
-				spr(57+level_num,75,25+16)
+				spr(38,44,self.y-13)
+				sspr(48,24,32,8,43,self.y-5)
+				spr(57+level_num,75,self.y-6)
 				pal()
 			end
 		end,
@@ -841,8 +847,8 @@ local entity_classes={
 					color(7)
 					spr(8,57,y-4)
 					spr(8,62,y-4,1,1,true)
-					spr(9,57,y+7)
-					spr(9,62,y+7,1,1,true)
+					spr(22,57,y+7)
+					spr(22,62,y+7,1,1,true)
 					d2=7
 				else
 					colorwash(13)
@@ -864,7 +870,6 @@ local entity_classes={
 	game_event_text={
 		render_layer=3,
 		x=64,
-		y=42,
 		frames_to_death=100,
 		draw=function(self)
 			color(({7,6,5,1})[mid(1,flr(self.frames_alive/4-20),4)])
@@ -881,7 +886,65 @@ local entity_classes={
 	painting2={
 		render_layer=3,
 		draw=function(self)
-			sspr(72,40,24,16,0,56)
+			sspr(80,0,24,16,0,56)
+		end
+	},
+	tumble_spider={
+		x=-10,
+		y=66,
+		vx=0.5,
+		update=function(self)
+			self.vy=mid(-2,self.vy+(btn(3) and 0.01 or 0)-(btn(2) and 0.01 or 0),2)
+			self.x+=self.vx
+			self.y=mid(20,self.y+self.vy,100)
+			self.y=mid(-20,self.y,148)
+			if self.x>130 then
+				self:die()
+			end
+		end,
+		draw=function(self)
+			local i=1+flr(self.frames_alive/10)%8
+			local frame=({13,29,45,29,13,29,45,29})[i]
+			local flipped_x=({true,false,false,false,false,true,true,true})[i]
+			local flipped_y=({false,false,false,true,true,true,true,false})[i]
+			spr(frame,self.x-3.5,self.y-3.5,1,1,flipped_x,flipped_y)
+		end,
+		on_death=function()
+			spider=nil
+		end
+	},
+	galaxy={
+		x=-1,
+		y=-1,
+		speed=1,
+		init=function(self)
+			self.dist=rnd(5)+rnd(12)*rnd(12)
+			self.angle=rnd(360)
+			self.speed=10/self.dist
+			self.color=({7,10,9,12,13,13,1})[mid(1,flr(self.dist/5),7)]--7--rnd_int(1,15)
+			if rnd(1)<0.1 then
+				self.color=({3,7,10,14})[rnd_int(1,4)]
+			end
+		end,
+		update=function(self)
+			self.angle+=self.speed
+			self.x=64+self.dist*cos(self.angle/360)
+			self.y=80+self.dist*sin(self.angle/360)/3
+			if spider and spider.is_alive and calc_square_dist(self.x,self.y,spider.x,spider.y)<9 then
+				local props=extract_props(self,{"colors","x","y"})
+				create_entity("floating_points",{
+					x=self.x,
+					y=self.y,
+					colors={12,13,5,1},
+					text="+10"
+				})
+				score+=1
+				bugs_eaten+=1
+				self:die()
+			end
+		end,
+		draw=function(self)
+			pset(self.x,self.y,self.color)
 		end
 	}
 }
@@ -890,6 +953,9 @@ local entity_classes={
 -- main functions
 function _init()
 	init_scene("title")
+	-- level_num,score_cumulative,is_story_mode=6,0,true
+	-- init_scene("game")
+	-- init_scene("scoring")
 end
 
 -- local frame_skip=0
@@ -953,17 +1019,17 @@ function _draw()
 	-- print("entities: "..#entities,2,110)
 	-- print("memory:   "..flr(stat(0)*(100/1024)).."%",2,116)
 	-- print("cpu:      "..flr(100*stat(1)).."%",2,122)
-	if debug_text then
-		rectfill(0,121,4*#debug_text,128,0)
-		print(debug_text,1,122,8)
-	end
+	-- if debug_text then
+	-- 	rectfill(0,121,4*#debug_text,128,0)
+	-- 	print(debug_text,1,122,8)
+	-- end
 end
 
 
 -- title functions
 function update_title()
-	if btnp(4) and scene_frame>7 then
-		init_scene("menu")
+	if btnp(4) and transition_frames_left<5 then
+		transition_to_scene("menu")
 	end
 end
 
@@ -989,7 +1055,7 @@ end
 
 function update_menu()
 	update_simulation()
-	if scene_frame>7 and transition_frames_left<=0 then
+	if scene_frame>7 and transition_frames_left<5 then
 		if btnp(4) then
 			menu_buttons:select()
 			local button_index=menu_buttons.button_index
@@ -1008,7 +1074,7 @@ function update_menu()
 				init_scene("credits")
 			end
 		elseif btnp(5) then
-			init_scene("title")
+			transition_to_scene("title")
 		end
 	end
 end
@@ -1131,7 +1197,7 @@ function init_level_select()
 	init_simulation()
 	menu_buttons=create_entity("buttons",{
 		y=24,
-		buttons={"garden","house","bridge","construction","skyscrapers","space"}
+		buttons={"garden","house","bridge","construction","skyscrapers","world"}
 	})
 end
 
@@ -1153,7 +1219,7 @@ function draw_level_select()
 	draw_simulation()
 	local i
 	for i=1,6 do
-		spr(21+i,100,9+16*i)
+		spr(38+i,100,9+16*i)
 	end
 	print("select a level",36,10,7)
 end
@@ -1168,7 +1234,11 @@ function init_game()
 	-- load the level
 	load_tiles(level[4],level[3])
 	-- create entities
-	create_entity("level_intro",{respawn_x=level[1],respawn_y=level[2]})
+	create_entity("level_intro",{
+		respawn_x=level[1],
+		respawn_y=level[2],
+		y=level_num==6 and 30 or 46
+	})
 	-- spider=create_entity("spider",{x=level[1],y=level[2],respawn_x=level[1],respawn_y=level[2]})
 	if level[5]=="platforms" then
 		create_entity("moving_platform",{x=52,y=32})
@@ -1190,16 +1260,28 @@ end
 function update_game()
 	-- count down the timer
 	if scene_frame%30==0 then
+		timer=decrement_counter(timer)
+		local game_event_text
 		if timer<=0 then
 			transition_to_scene("scoring")
-		elseif timer==131 then
-			create_entity("game_event_text",{text="build a web!"})
-		elseif timer==101 then
-			create_entity("game_event_text",{text="10 seconds!"})	
-		elseif timer==92 then
-			create_entity("game_event_text",{text="catch bugs!"})	
+		elseif timer==130 then
+			game_event_text="build a web!"
+		elseif timer==100 then
+			game_event_text="10 seconds!"
+		elseif timer==91 then
+			game_event_text="catch bugs!"
+		elseif timer==5 then
+			game_event_text="5 seconds!"
+		-- spawn a butteryfly at 0:30
+		elseif timer==30 then
+			spawn_bugs(7,1)
 		end
-		timer=decrement_counter(timer)
+		if game_event_text then
+			create_entity("game_event_text",{
+				text=game_event_text,
+				y=level_num==6 and 26 or 42
+			})
+		end
 	end
 	-- spawn bugs from 1:30 to 0:04
 	if timer==mid(4,timer,90) then
@@ -1207,27 +1289,17 @@ function update_game()
 		-- spawn a new bug every so often
 		frames_until_spawn_bug=decrement_counter(frames_until_spawn_bug)
 		if frames_until_spawn_bug<=0 then
-			local max_bug_type,dir_x,dir_y,num_bugs,r,bug_type,i=flr(0.5+(level_num+phase)/1.5),rnd_int(-1,1),rnd_int(-1,1),rnd_int(1,3),rnd(1),1
-			if dir_x==0 and dir_y==0 then
-				dir_x=1
-			end
-			local spawn_point=level_spawn_points[num_bugs][rnd_int(1,#level_spawn_points[num_bugs])]
-			for i=5,2,-1 do
-				if r<i/10 and max_bug_type>=i then
-					bug_type=i
+			-- after the 1:30 mark, levels are divided into three 30 second phases
+			-- in the second phase, a new bug type is introduced
+			-- a bug species has triple spawn rate the phase it is introduced
+			-- flies have a 20% chance of being happyflies
+			local max_bug_species_index,num_bugs,bug_species_index,i=min(level_num-(phase==1 and 1 or 0),5),rnd_int(1,3),((level_num>1 or phase>1) and rnd(1)<0.2 and 6 or 1) -- ,nil
+			for i=max_bug_species_index,2,-1 do
+				if rnd(1)<(level_num==i and phase==2 and 0.3 or 0.1) then
+					bug_species_index=i
 				end
 			end
-			if bug_type>=max_bug_type then
-				num_bugs=1 -- fine that this is after num_bugs is first used
-			end
-			for i=1,num_bugs do
-				create_entity("bug_spawn_flash",{
-					frames_to_death=15*i,
-					species=bug_type,
-					x=8*(spawn_point[1]+i*dir_x-dir_x)-5,
-					y=8*(spawn_point[2]+i*dir_y-dir_y)-10
-				})
-			end
+			spawn_bugs(bug_species_index,num_bugs)
 			-- phase 1: 1.0s to 2.5s between spawns
 			-- phase 2: 0.5s to 2.0s between spawns
 			-- phase 3: 0.5s to 1.0s between spawns
@@ -1266,7 +1338,7 @@ function draw_game()
 	color(spider and spider.is_spinning_web and 7 or 5)
 	rectfill(35,2,35+50*(spider and spider.webbing/spider.max_webbing or 1),5)
 	rect(35,1,85,6)
-	spr(10,87,0)
+	spr(23,87,0)
 	-- draw timer
 	if timer<=5 and scene_frame%30<=20 then
 		color(8)
@@ -1284,7 +1356,7 @@ end
 function init_scoring()
 	score_cumulative+=score
 	-- save level high score
-	if dget(level_num)<=score then
+	if level_num>0 and dget(level_num)<=score then
 		dset(level_num,score)
 	end
 	-- save story mode high score
@@ -1297,13 +1369,15 @@ function update_scoring()
 	local final_frame=74+bugs_eaten+score
 	if scene_frame>15 and btnp(4) then
 		if scene_frame<final_frame then
-			scene_frame=final_frame
+			scene_frame=final_frame+30
 		elseif transition_frames_left<=0 then
-			if is_story_mode and level_num<#levels then
+			if not is_story_mode or level_num<0 then
+				transition_to_scene("title")
+			elseif level_num<#levels then
 				level_num+=1
 				transition_to_scene("game")
 			else
-				transition_to_scene("title")
+				transition_to_scene("ending")
 			end
 		end
 	end
@@ -1318,7 +1392,7 @@ function draw_scoring()
 	-- draw number of bugs eaten
 	local b=mid(0,f,bugs_eaten)
 	if f>0 then
-		print("bugs eaten",17,45)
+		print(level_num<0 and "galaxies eaten" or "bugs eaten",17,45)
 		print(b,107-4*#(""..b),45)
 	end
 	-- draw score
@@ -1337,7 +1411,7 @@ function draw_scoring()
 	-- draw continue text
 	if f>bugs_eaten+score+60 then
 		if (f-bugs_eaten-score-60)%30<20 then
-			if dget(level_num)<=score then
+			if level_num>0 and dget(level_num)<=score then
 				print("best!",108,57,13)
 			end
 			if is_story_mode and dget(0)<=score_cumulative then
@@ -1371,6 +1445,34 @@ function draw_credits()
 		score_text=s==0 and "0" or s.."0"
 		print(i==7 and "playthrough" or levels[i][3],17,44+7*i)
 		print(score_text,107-4*#score_text,44+7*i)
+	end
+end
+
+
+-- ending functions
+function init_ending()
+	level_num=-1
+	init_simulation()
+	local i
+	for i=1,150 do
+		create_entity("galaxy",{})
+	end
+end
+
+function update_ending()
+	update_simulation()
+	if scene_frame==200 then
+		spider=create_entity("tumble_spider",{})
+	elseif scene_frame==550 then
+		transition_to_scene("scoring")
+	end
+end
+
+function draw_ending()
+	draw_simulation()
+	if scene_frame>100 then
+		print("thanks for playing!",23,20,7)
+		spr(24,99,18)
 	end
 end
 
@@ -1513,6 +1615,21 @@ function add_new_entities_to_game()
 	new_entities={}
 end
 
+function spawn_bugs(bug_species_index,num_bugs)
+	local spawn_point,dir_x,dir_y=level_spawn_points[num_bugs][rnd_int(1,#level_spawn_points[num_bugs])],rnd_int(-1,1),rnd_int(-1,1)
+	if dir_x==0 and dir_y==0 then
+		dir_x=1
+	end
+	for i=1,num_bugs do
+		create_entity("bug_spawn_flash",{
+			frames_to_death=15*i,
+			species=bug_species_index,
+			x=8*(spawn_point[1]+i*dir_x-dir_x)-5,
+			y=8*(spawn_point[2]+i*dir_y-dir_y)-10
+		})
+	end
+end
+
 
 -- tile functions
 function reset_tiles()
@@ -1652,7 +1769,11 @@ end
 
 function calc_square_dist(x1,y1,x2,y2)
 	local dx,dy=x2-x1,y2-y1
-	return dx*dx+dy*dy
+	local square_dist=dx*dx+dy*dy
+	if square_dist<0 then
+		return 9999
+	end
+	return square_dist
 end
 
 function calc_closest_point_on_line(x1,y1,x2,y2,cx,cy)
@@ -1741,9 +1862,9 @@ function init_scene(s)
 	scenes[scene][1]()
 end
 
-function debug_print(s)
-	debug_text="> " .. s
-end
+-- function debug_print(s)
+-- 	debug_text="> " .. (s==nil and "nil" or s)
+-- end
 
 function transition_to_scene(s)
 	next_scene=s
@@ -1816,35 +1937,36 @@ scenes={
 	level_select={init_level_select,update_level_select,draw_level_select},
 	game={init_game,update_game,draw_game},
 	scoring={init_scoring,update_scoring,draw_scoring},
-	credits={noop,update_credits,draw_credits}
+	credits={noop,update_credits,draw_credits},
+	ending={init_ending,update_ending,draw_ending}
 }
 
 
 __gfx__
-000000000000000000000070000000000000000000000000dd0ddddd077700700000000000000000000000000000000000000000000070000000700000007000
-000000777700000000000707000000000000000000000000d0d000d0070077770000007000000000775005500800080008000800000777000007770000077700
-000077700d770000000007070000000000000000000000000ddddd00070070700000770000000000777700500080800000808000070777070007770707077700
-000776000007700005000707000000000000000000000000d0d00000007777007007070077707700777777000008000000080000007777700777777000777777
-007770000000700050507707000000000000000000000000d0d00000007070000770007000070700007777770080800000808000000777000007770000077700
-007650000000d700d0007760000000000000000000000000d0d00000077700000000000000000070050077770800080008000800007171700771717000717177
-00670000000007000ddd770000007770007700777dd00000dd000000707000000000000000000000055005770000000000000000070707070007070707070700
-0077d00000000700000077000007007007070700000d0000d0000000077700000000000000000000000000000000000000000000000000000000000000000000
-0077700000000700076070007007770070070077000d000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0007770000007000700770060707000d7007000070d000000b0000bb00066000a9900aa9060505060000aaa00000606008000800077707000777007007770700
-000777700005700007770677700077700777077700d000000b330b3300066ee0040000408885058800000a000c00000600808000077777000777770707777700
-0000777775d6000000005500000000000007d000000ddd0099900bb3000660be66666666222a0522200009900003630000080000077777770777777007777777
-00000777777000000050000000070000007700000ddd0d00994000b06600003366d00d660608880620000990070c310000808000007771700077717000777170
-0000dd777777600000055ddd000700000707ddddd000d00094400e82660000ffad0000da06000006220009cc00066c0008000800077717070777170700771707
-000666d777767700000000007dd77dddd7d700000000000099400882000600ffa9cccc9a88800088266009cc6600000000000000000770000007700007077000
-00777500777767700000000707070077077000005000000044444444004444449cccccc92220002226d0cccc6d0000c000000000000707000007070000700700
+000000000000000000000070000000000000000000000000dd0ddddd077700700000000000000000666155511555111111111555000070000000700000007000
+000000777700000000000707000000000000000000000000d0d000d0070077770000007008000800566155ccc1c55516155515dd000777000007770000077700
+000077700d770000000007070000000000000000000000000ddddd00070070700000770000808000561155c1cc1c551115551d55070777070007770707077700
+000776000007700005000707000000000000000000000000d0d00000007777007007070000080000511655c1111155111555d555007777700777777000777777
+007770000000700050507707000000000000000000000000d0d000000070700007700070008080005111ccc11111555555551555000777000007770000077700
+007650000000d700d0007760000000000000000000000000d0d000000777000000000000080008005111551ccc111566555d5555007171700771717000717177
+00670000000007000ddd770000007770007700777dd00000dd0000007070000000000000000000005555c5111115565565555d55070707070007070707070700
+0077d00000000700000077000007007007070700000d0000d00000000777000000000000000000005555cc111115595556555d55000000000000000000000000
+0077700000000700076070007007770070070077000d0000000000000000000000000000000000005555c1cc111185555556d555000000000000000000000000
+0007770000007000700770060707000d7007000070d0000000000000775005500000000008000800555c11111151555555555555077707000777007007770700
+000777700005700007770677700077700777077700d00000000000007777005000d0d00000808000555c11111551155555555555077777000777770707777700
+0000777775d6000000005500000000000007d000000ddd0077707700777777000ddddd0000080000555c11111151155555555555077777770777777007777777
+00000777777000000050000000070000007700000ddd0d0000070700007777770ddddd000080800055cc111111511555555555dd007771700077717000777170
+0000dd777777600000055ddd000700000707ddddd000d000000000700500777700ddd0000800080055c1111111111555555ddd55077717070777170700771707
+000666d777767700000000007dd77dddd7d70000000000000000000005500577000d00000000000055c1111111111555ddd5555d000770000007700007077000
+0077750077776770000000070707007707700000500000000000000000000000000000000000000055c11111111155dd5555dddd000707000007070000700700
 07770000077776770000000707070570700000550000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-d7700000007776676005000707007007dddddd000000000000000000000000000007000000000700000000000000000008000800007000700007070000700070
-77700077660777667050507707000000000000000000000000000000070000000007000070077000000000000000000000808000000707000007070000070700
-77000700006d776676d0007760000000000000000000000000000000007700000077000007777000000707700007000000080000077771700777717007777170
-7700700000076777770ddd7700000077007007d07770000000000070007770000777770000777000007770000777770000808000777777007777770077777700
-77007000770077766700007700000700707007070070000000000707000770000007700000777700770700000007000008000800077771700777717007777170
-777070007700777667076070007007007070700777000ddd00000707000007000007000000770070000000000000000000000000000707000007070000070700
-777007000600077676700770060707007d7070070000d00d05000707000000000007000007000000000000000000000000000000007000700070007000070700
+d7700000007776676005000707007007dddddd0000000000000000000b0000bb000ff000a9900aa9060505060000aaa000006060007000700007070000700070
+777000776607776670505077070000000000000000000000000000000b330b33000ffee0040000408885058800000a000c000006000707000007070000070700
+77000700006d776676d000776000000000000000000000000000000099900bb3000ff0be66666666222a05222000099000036300077771700777717007777170
+7700700000076777770ddd7700000077007007d07770000000000070994000b0ff00003366d00d660608880620000990070c3100777777007777770077777700
+7700700077007776670000770000070070700707007000000000070794400e82ff0000ffad0000da06000006220009cc00066c00077771700777717007777170
+777070007700777667076070007007007070700777000ddd0000070799400882000600ffa9cccc9a88800088266009cc66000000000707000007070000070700
+777007000600077676700770060707007d7070070000d00d0500070744444444004444449cccccc92220002226d0cccc6d0000c0007000700070007000070700
 07770077700007777007770677700077d0070000777dddd050507707000000000000000000070000000070000077770000077700000007700077777000077700
 077700000000777760000dddd000000000dd0000000d0000d0007760000000000000000000707000000670000770677000700770000707700070000000760070
 007770000000777700000d000500000006005000ddd000000ddd7700000077707007d07770707000007770000700067000600760007707700077700007700000
@@ -1861,30 +1983,30 @@ d7700000007776676005000707007007dddddd000000000000000000000000000007000000000700
 000cc000000cc00000ccc00000ccc00000cdcd0000cdc00000cccd00744fffe4747fff770033000070330700035b5000765b56700333300003305b000db33300
 00000000000000000d0c0d000d0c0d0000d0dd000d0dd0000c00d0004f4e77744efe77ff0000000000000000003330006033306003bb30000005350000b3b000
 00000000000000000000000000000000000000000000000000000000e44777e4efe4feff00000000000000000500050005000500000000000000000000000000
-000000000000000000000000000000000000000008708000080087707e4e7f4477f4e4ef66615551155511111111155500000000000000000000000000000000
-000000000000000000000000000000000000000087000800800008077742ff47fffe4eff566155ccc1c55516155515dd08000800080008000800080008000800
-078287000082800077828770008280000022000078088000080880007ff4e42fef44efff561155c1cc1c551115551d5500808000008080000080800000808000
-06828600078287006682866077828770082880007888200008882000ff7e42ff44efffff511655c1111155111555d55500080000000800000008000000080000
-008880000688860008282800662826608282880078ee880008ee880077ff42e4ffffffff5111ccc1111155555555155500808000008080000080800000808000
-000000000000000050e8e05050e8e0508888880007eeee0000eeee00ffff4442ffffffff5111551ccc111566555d555508000800080008000800080008000800
-00000000000000000080800000808000827282000202020002020200ffeff44fffffffff5555c5111115565565555d5500000000000000000000000000000000
-00000000000000000000000000000000087800000000000000000000fe4eff4efffeffff5555cc111115595556555d5500000000000000000000000000000000
-00000000000000000000000000000000000000020022000000000000ffe44e44fff44eff5555c1cc111185555556d55500000000000000000000000000000000
-000000000000000000000000000000000000dd02000444000000dd02ffffe444ef4fefff555c1111115155555555555508000800080008000800080008000800
-00000000000000000099900000999000009942400092442200999d02ffffff4444efffff555c1111155115555555555500808000008080000080800000808000
-70aa070000aa000022aaa22022aaa22009aa444009a4420009aaa424fffff444ef2effff555c1111115115555555555500080000000800000008000000080000
-0a44a0000a44a0007a444a700a444a0009aa424009aaa9d009aaa444fffff442ffefffff55cc111111511555555555dd00808000008080000080800000808000
-0944900079449700092429006924296009aaa90209aaa9d009aaa424fffff44fffffffff55c1111111111555555ddd5508000800080008000800080008000800
-0000000000000000004440007044407000999d020099900000999d02ffff442ffffffeff55c1111111111555ddd5555d00000000000000000000000000000000
-0000000000000000040004000400040000000000000000000000dd02fff4f42fffffffff55c11111111155dd5555dddd00000000000000000000000000000000
+000000000000000000000000000000000000000008708000080087707e4e7f4477f4e4ef00000000000000000000000000000000000000000000000000000000
+000000000000000000000000000000000000000087000800800008077742ff47fffe4eff000000000000000098000890088d880000ba98000000a98000980000
+078287000082800077828770008280000022000078088000080880007ff4e42fef44efff0000000000000000a98d89a099ada9900cba98000e0ba9800ba98d00
+06828600078287006682866077828770082880007888200008882000ff7e42ff44efffff0980890008ada800ba9d9ab09abdba900cbadd0000cba9800cbad880
+008880000688860008282800662826608282880078ee880008ee880077ff42e4ffffffff0cadac0009cdc900cbadabc0abcdcba0e0dd9800e0dddd0000cda990
+000000000000000050e8e05050e8e0508888880007eeee0000eeee00ffff4442ffffffff0bedeb0000b0b0000cbdbc00bce0ecb000cba9800cba98000e0dbaa0
+00000000000000000080800000808000827282000202020002020200ffeff44fffffffff000000000000000000c0c0000c000c000e0cba800cba98000000cbb0
+00000000000000000000000000000000087800000000000000000000fe4eff4efffeffff00000000000000000e000e00000000000000ba0000098000000e0000
+00000000000000000000000000000000000000020022000000000000ffe44e44fff44eff00000000000000000000000000000000000000000000000000000000
+000000000000000000000000000000000000dd02000444000000dd02ffffe444ef4fefff000000000000000000707000000000000000d0000000000000000000
+00000000000000000099900000999000009942400092442200999d02ffffff4444efffff000000000000000000606000000000000d00d0000000dd0000dd0000
+70aa070000aa000022aaa22022aaa22009aa444009a4420009aaa424fffff444ef2effff007007000000000000eee00076eee67000efe00000efe00000fee000
+0a44a0000a44a0007a444a700a444a0009aa424009aaa9d009aaa444fffff442ffefffff000ee000007ee70000fef00000fef00000eee000002ee0000deefdd0
+0944900079449700092429006924296009aaa90209aaa9d009aaa424fffff44fffffffff000ee000000ee00000eee00000e2e00000efed0000efe00000eee000
+0000000000000000004440007044407000999d020099900000999d02ffff442ffffffeff00000000000000000e000e000e000e0000d00d000d0dd0000000d000
+0000000000000000040004000400040000000000000000000000dd02fff4f42fffffffff00000000000000000000000000000000000000000000000000000000
 00000000000000000500050005000500000000000000000000000000fff4f42fffffffff00000000000000000000000000000000000000000000000000000033
-005050000050500070aaa07000aaa00000d5a0000dda5a0000500d00ff4f422fffffefff0800080008000800080008000800080008000800000000000000003b
-075a5700005a5000675a5760005a5000005aaa005dda5aa05aa50550f4242424ffffffff0080800000808000008080000080800000808000000000000000f533
-069a9600079a9700069a9600079a9700000555000a5955a005a95aa044244242ffffffff000800000008000000080000000800000008000000000000000ffff3
-0055500006555600005550007655567009a9add00aaa0d5009aa5aa04244222294999999008080000080800000808000008080000080800006666666000fffff
-00a7a00000a7a00000a9a00060a9a06005a5add00a5900000da5aa00444242224f4999e9080008000800080008000800080008000800080000566666000fffff
-000600000006000000575000005750000aaa0000500000000dd000004444222f94f4f9f900000000000000000000000000000000000000000005566600005fff
-0000000000000000000600000006000050005000000000000000000044224229499f9999000000000000000000000000000000000000000000005555000005ff
+005050000050500070aaa07000aaa00000d5a0000dda5a0000500d00ff4f422fffffefff0000000000070000000007000000000000000000000000000000003b
+075a5700005a5000675a5760005a5000005aaa005dda5aa05aa50550f4242424ffffffff0700000000070000700770000000000000000000000000000000f533
+069a9600079a9700069a9600079a9700000555000a5955a005a95aa044244242ffffffff007700000077000007777000000707700007000000000000000ffff3
+0055500006555600005550007655567009a9add00aaa0d5009aa5aa04244222294999999007770000777770000777000007770000777770006666666000fffff
+00a7a00000a7a00000a9a00060a9a06005a5add00a5900000da5aa00444242224f4999e9000770000007700000777700770700000007000000566666000fffff
+000600000006000000575000005750000aaa0000500000000dd000004444222f94f4f9f900000700000700000077007000000000000000000005566600005fff
+0000000000000000000600000006000050005000000000000000000044224229499f9999000000000007000007000000000000000000000000005555000005ff
 00000555000005ff5fffffff0000003b0000eeeeeeee000005ffffff00eeeee000b3033000b30b30ffffffffffffffff44444444444444444444444477777777
 0000005f00005fff55ffffff0000003b0000e222eeeeee005fffffffee2eeeee00b3033000b30b30ffffffffffffffff44444444444444444444444477777777
 0000005f00005fff05ffffff0000003b000e99922eeeee005fffffffeee2222e00b3033055b35b35ffffffffffffffff44444422222222222222222277777777
