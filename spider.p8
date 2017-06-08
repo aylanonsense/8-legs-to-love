@@ -4,7 +4,7 @@ __lua__
 
 
 -- set cart data (for saving and loading high scores)
-cartdata("bridgs_8legstolove_1_test1")
+cartdata("bridgs_8legstolove_1_test2")
 
 -- global vars
 local scene
@@ -13,6 +13,7 @@ local transition_frames_left=0
 local scene_frame
 local level_num
 local level
+local level_tileset
 local score
 local score_cumulative
 local bugs_eaten
@@ -35,12 +36,11 @@ local menu_buttons
 local is_story_mode
 -- local debug_text
 
-
 -- constants
 local tile_flip_matrix={8,4,2,1,128,64,32,16}
 local scenes={}
 local levels={
-	-- spawn_x,spawn_y,tileset,tiles,has_bottom
+	-- spawn_x,spawn_y,tileset,tile_data,has_bottom
 	{20,75,"garden","m##n        vrqn !@      vtr #$n !@  qsu   vr#$n !@qsu  . . o#@n opp  . .+. m!@ i86l .+.*.+. !@ e666j .+*+ ..!@ e669f.+*..+. !@ g666f..+*+. .!@ e686f.+.*+.. op e666f +*+.. w%^xe669h.+.+. y-(((g866j . .. 0((((c544daaaaaac44542233222222322323",true},
 	{75,107,"house","       $00#            $00#            $00#            $00#          ..)88(.mo      .+. . . .ksp!!!%.++.++.+.kul000# +.*+**+.kul000#.+*+.+*+.cwd888(.++*+.++ e0f   ..+*+.+*+.gyh    ++..++++.qyr     .ab ... i0j    444444444444    246324632643"},
 	{27,51,"bridge","wxwx        mwxwxwxn          yi ymwl. .   .okz kyi  .*+*+.kxwxl y .+.+.++.. jz  z  . .. .    y 444424476555555300000eg..hf11111000eg. . ..hf111!0c ..+**+. .d1@80a.+++*+*++ b19#!  +++.++.+  @$#8   . . ..   9$#vssssssssssqsu$vssssssssssssssu"},
@@ -68,6 +68,8 @@ local bug_species={
 	{"happyfly",105,{14,13,2,1},2,240,true},
 	{"butterfly",89,{7,6,5,1},10,180,true}
 }
+
+-- classes for every game object we'll be creating
 local entity_classes={
 	spider={
 		vx_strands=0,
@@ -186,17 +188,21 @@ local entity_classes={
 				sfx(3,1)
 				self:finish_spinning_web()
 			-- the spider starts spinning web when z is pressed
-			elseif not self.is_spinning_web and self.button_spin_press and self.webbing>0 then
-				self.is_spinning_web,self.frames_until_spin_web,self.length_of_spun_web=true,0,0
-				local web_point=self:spin_web_point(true,true,false)
-				self.spun_strand=create_entity("web_strand",{from=self,to=web_point})
-				create_entity("web_length_hint",{
-					x=self.x,
-					y=self.y,
-					web_point=web_point
-				})
-				-- play spinning sound
-				sfx(2,1)
+			elseif not self.is_spinning_web and self.button_spin_press then
+				if self.webbing>0 then
+					self.is_spinning_web,self.frames_until_spin_web,self.length_of_spun_web=true,0,0
+					local web_point=self:spin_web_point(true,true,false)
+					self.spun_strand=create_entity("web_strand",{from=self,to=web_point})
+					create_entity("web_length_hint",{
+						x=self.x,
+						y=self.y,
+						web_point=web_point
+					})
+					-- play spinning sound
+					sfx(2,1)
+				else
+					sfx(13,1)
+				end
 			-- the spider stops spinning web when z is no longer held or it's been spinning for too long
 			elseif self.is_spinning_web and not self.button_spin then
 				self.is_placing_web,self.is_spinning_web=true -- ,false
@@ -204,19 +210,24 @@ local entity_classes={
 				sfx(-1,1)
 			end
 			-- the spider continuously creates web while z is held
-			if self.is_spinning_web and self.frames_until_spin_web<=0 and self.webbing>0 and self.length_of_spun_web<25 then
-				local web_point=self:spin_web_point(false,true,false)
-				self.length_of_spun_web+=1
-				self.spun_strand.from=web_point
-				self.frames_until_spin_web,self.spun_strand=5,create_entity("web_strand",{from=self,to=web_point})
-				decrement_counter_prop(self,"webbing")
+			if self.is_spinning_web and self.frames_until_spin_web<=0 and self.length_of_spun_web<25 then
+				if self.webbing>0 then
+					local web_point=self:spin_web_point(false,true,false)
+					self.length_of_spun_web+=1
+					self.spun_strand.from=web_point
+					self.frames_until_spin_web,self.spun_strand=5,create_entity("web_strand",{from=self,to=web_point})
+					decrement_counter_prop(self,"webbing")
+				elseif scene_frame%8==0 then
+					sfx(13,1)
+				end
 			end
 			-- the spider stays in bounds
 			self.x=mid(4,self.x,123)
 			-- the spider can fall off the bottom of bottomless levels
-			if level[3]=="bridge" then
+			if level_tileset=="bridge" then
 				if self.y>110 and not self.is_on_tile then
 					create_entity("splash",extract_props(self,{"x","y"}))
+					sfx(14,0)
 					self:die()
 				end
 			else
@@ -256,6 +267,7 @@ local entity_classes={
 			end
 		end,
 		on_death=function(self)
+			sfx(-1,1)
 			self:finish_spinning_web()
 			create_entity("spider_respawn",extract_props(self,{"x","y","respawn_x","respawn_y","webbing"}))
 		end,
@@ -320,6 +332,9 @@ local entity_classes={
 	},
 	spider_respawn={
 		frames_to_death=60,
+		init=function(self)
+			sfx(11,1)
+		end,
 		update=function(self)
 			self.x+=(self.respawn_x-self.x)/self.frames_to_death
 			self.y+=(self.respawn_y-self.y)/self.frames_to_death
@@ -351,7 +366,7 @@ local entity_classes={
 		update=function(self)
 			if self.is_in_freefall then
 				self.mass=1
-				if level[3]=="bridge" and self.y>=110 then
+				if level_tileset=="bridge" and self.y>=110 then
 					self.mass=2.5
 				end
 				apply_gravity(self,0.02,0.02,0.01)
@@ -421,11 +436,12 @@ local entity_classes={
 			-- die if the strand gets too long or if the points die
 			if len>=25 or not from.is_alive or not to.is_alive then
 				self:die()
+				sfx(9,0)
 			end
 		end,
 		draw=function(self)
 			color(({8,8,9,15,7})[ceil(1+4*self.percent_elasticity_remaining)])
-			if level[3]=="bridge" then
+			if level_tileset=="bridge" then
 				if self.from.y>=115 and self.to.y>=115 then
 					color(13)
 				elseif self.from.y>=110 and self.to.y>=110 then
@@ -441,9 +457,9 @@ local entity_classes={
 		draw=function(self)
 			if self.frames_to_death<=15 then
 				colorwash(bug_species[self.species][3][1])
-				if bug_species[self.species][1]=="butterfly" then
-					colorwash(({8,9,10,11,12,14})[1+flr(self.frames_alive/2)%6])
-				end
+				-- if bug_species[self.species][1]=="butterfly" then
+				-- 	colorwash(({8,9,10,11,12,14})[1+flr(self.frames_alive/2)%6])
+				-- end
 				spr(126-ceil(self.frames_to_death/3),self.x-3,self.y-4)
 				pal()
 			end
@@ -465,7 +481,7 @@ local entity_classes={
 				self[v]=bug_species[self.species][k]
 			end
 			create_entity("spawn_ring",{target=self})
-			sfx(7,3)
+			sfx(7,2)
 		end,
 		update=function(self)
 			local species_name=self.species_name
@@ -509,6 +525,7 @@ local entity_classes={
 								spider.hitstun_frames=25
 							end
 						end
+						sfx(8,2)
 						self:die()
 					else
 						self:escape()
@@ -537,8 +554,9 @@ local entity_classes={
 			if spider and spider.is_alive and 49>calc_square_dist(spider.x,spider.y,self.x,self.y) then
 				if species_name=="hornet" and self.is_catchable then
 					if spider.hitstun_frames<=0 then
-						spider.hitstun_frames,spider.vy=25,1.5
+						spider.hitstun_frames,spider.vy=25,-1.5
 						spider.vx*=0.5
+						sfx(12,2)
 					end
 				elseif self.is_consumable then
 					local props=extract_props(self,{"colors","x","y"})
@@ -546,7 +564,7 @@ local entity_classes={
 					create_entity("floating_points",props)
 					score+=self.points
 					bugs_eaten+=1
-					sfx(6,2)
+					sfx(species_name=="butterfly" and 19 or 6,2)
 					self:die()
 				end
 			end
@@ -565,6 +583,9 @@ local entity_classes={
 				sprite+=4+flr(self.frames_alive/5)%3
 				if self.species_name=="firefly" and self.frames_until_escape<105 and self.frames_until_escape%35>25 then
 					colorwash(8)
+					if self.frames_until_escape%35==34 then
+						sfx(21,2)
+					end
 				end
 			else
 				if self.frames_alive%6<3 then
@@ -594,6 +615,7 @@ local entity_classes={
 				self.caught_web_point.caught_bug,self.caught_web_point=nil -- ,nil
 			end
 			self.render_layer,self.frames_to_death,self.vy,self.is_catchable,self.is_consumable=8,12,-1.5 -- ,false,false
+			sfx(20,3)
 		end,
 		on_death=function(self)
 			if self.caught_web_point then
@@ -682,11 +704,11 @@ local entity_classes={
 	},
 	level_intro={
 		x=59,
-		frames_to_death=139,
+		frames_to_death=200,
 		draw=function(self)
 			local f=self.frames_alive-40
 			if f>2 then
-				local colors,j,i={1,5,13,6,7},mid(flr(f/4),1,flr(25-f/4)) -- ,nil
+				local colors,j,i={1,5,13,6,7},mid(flr(f/4),1,flr(40-f/4)) -- ,nil
 				for i=j,#colors do
 					pal(colors[i],colors[j])
 				end
@@ -706,7 +728,7 @@ local entity_classes={
 			add(moving_platforms,self)
 		end,
 		init=function(self)
-			self.chains=create_entity("chains",{})
+			self.chains=create_entity("chains")
 		end,
 		update=function(self)
 			local f=self.frames_alive%357
@@ -802,6 +824,7 @@ local entity_classes={
 				self.button_entities[self.button_index].is_highlighted=false
 				self.button_index=wrap_number(1,self.button_index + (btnp(3) and 1 or 0) - (btnp(2) and 1 or 0),#self.button_entities)
 				self.button_entities[self.button_index].is_highlighted=true
+				sfx(18,0)
 			end
 		end,
 		select=function(self)
@@ -848,6 +871,9 @@ local entity_classes={
 		render_layer=3,
 		x=64,
 		frames_to_death=100,
+		init=function(self)
+			sfx(17,3)
+		end,
 		draw=function(self)
 			color(({7,6,5,1})[mid(1,flr(self.frames_alive/4-20),4)])
 			local wiggle=self.frames_alive<4 and 2*(self.frames_alive%2)-1 or 0
@@ -924,9 +950,6 @@ local entity_classes={
 -- main functions
 function _init()
 	init_scene("title")
-	-- level_num,score_cumulative,is_story_mode=6,0,true
-	-- init_scene("game")
-	-- init_scene("scoring")
 end
 
 -- local frame_skip=0
@@ -999,7 +1022,10 @@ end
 
 -- title functions
 function update_title()
-	if btnp(4) and transition_frames_left<5 then
+	-- if scene_frame==5 then
+	-- 	play title music
+	-- end
+	if btnp(4) and transition_frames_left<=0 then
 		sfx(5,0)
 		transition_to_scene("menu")
 	end
@@ -1027,7 +1053,7 @@ end
 
 function update_menu()
 	update_simulation()
-	if scene_frame>7 and transition_frames_left<5 then
+	if scene_frame>7 and transition_frames_left<=0 then
 		if btnp(4) then
 			menu_buttons:select()
 			local button_index=menu_buttons.button_index
@@ -1065,8 +1091,8 @@ function init_tutorial()
 	-- reset entities, tiles, and variables
 	init_simulation()
 	-- load the tutorial level
-	level=tutorial_level
-	load_tiles(level[4],level[3])
+	level,level_tileset=tutorial_level,tutorial_level[3]
+	load_tiles(level[4])
 end
 
 function update_tutorial()
@@ -1200,8 +1226,9 @@ function init_game()
 	-- reset entities, tiles, and variables
 	init_simulation()
 	level,timer,frames_until_spawn_bug,spawns_until_pause=levels[level_num],141,0,3
+	level_tileset=level[3]
 	-- load the level
-	load_tiles(level[4],level[3])
+	load_tiles(level[4])
 	-- create entities
 	create_entity("level_intro",{
 		respawn_x=level[1],
@@ -1209,9 +1236,9 @@ function init_game()
 		y=level_num==6 and 30 or 46
 	})
 	-- spider=create_entity("spider",{x=level[1],y=level[2],respawn_x=level[1],respawn_y=level[2]})
-	if level[3]=="construction" then
+	if level_tileset=="construction" then
 		create_entity("moving_platform",{x=52,y=32})
-	elseif level[3]=="skyscrapers" then
+	elseif level_tileset=="skyscrapers" then
 		wind_frames,wind_dir,wind_x,wind_y=300,1,0,0
 		for i=1,50 do
 			create_entity("wind_particle",{
@@ -1220,13 +1247,16 @@ function init_game()
 				move_scale=0.25+rnd(0.75)
 			})
 		end
-	elseif level[3]=="house" then
-		create_entity("painting1",{})
-		create_entity("painting2",{})
+	elseif level_tileset=="house" then
+		create_entity("painting1")
+		create_entity("painting2")
 	end
 end
 
 function update_game()
+	if scene_frame==62 then
+		music(0)
+	end
 	-- count down the timer
 	if scene_frame%30==0 then
 		timer=decrement_counter(timer)
@@ -1282,13 +1312,15 @@ function update_game()
 		end
 	end
 	-- update the wind
-	if level[3]=="skyscrapers" then
+	if level_tileset=="skyscrapers" then
 		wind_frames=decrement_counter(wind_frames)
 		if wind_frames<=0 then
 			if wind_x==0 and wind_y==0 then
 				wind_dir,wind_frames,wind_x,wind_y=-1*wind_dir,rnd_int(175,300),wind_dir*rnd_int(2,4),rnd_int(-2,1)/2
+				sfx(15,2)
 			else
 				wind_frames,wind_x,wind_y=rnd_int(125,250),0,0
+				sfx(16,2)
 			end
 		end
 	end
@@ -1365,6 +1397,9 @@ function draw_scoring()
 	if f>0 then
 		print(level_num<0 and "galaxies eaten" or "bugs eaten",17,45)
 		print(b,107-4*#(""..b),45)
+		if b<bugs_eaten then
+			sfx(10,0)
+		end
 	end
 	-- draw score
 	if f>bugs_eaten+20 then
@@ -1372,6 +1407,9 @@ function draw_scoring()
 		local s=mid(0,f-bugs_eaten-20,score)
 		score_text=s==0 and "0" or s.."0"
 		print(score_text,107-4*#score_text,59)
+		if s<score then
+			sfx(10,0)
+		end
 	end
 	-- draw cumulative score
 	if f>bugs_eaten+score+40 then
@@ -1379,16 +1417,20 @@ function draw_scoring()
 		score_text=score_cumulative==0 and "0" or score_cumulative.."0"
 		print(score_text,107-4*#score_text,73)
 	end
+	if f==0 or f==bugs_eaten+20 or f==bugs_eaten+score+40 then
+		sfx(10,0)
+	end
 	-- draw continue text
 	if f>bugs_eaten+score+60 then
 		if (f-bugs_eaten-score-60)%30<20 then
+			color(13)
 			if level_num>0 and dget(level_num)<=score then
-				print("best!",108,57,13)
+				print("best!",108,57)
 			end
 			if is_story_mode and dget(0)<=score_cumulative then
-				print("best!",108,71,13)
+				print("best!",108,71)
 			end
-			print("press z to continue",26,93,13)
+			print("press z to continue",26,93)
 		end
 	end
 end
@@ -1427,14 +1469,16 @@ function init_ending()
 	init_simulation()
 	local i
 	for i=1,150 do
-		create_entity("galaxy",{})
+		create_entity("galaxy")
 	end
 end
 
 function update_ending()
 	update_simulation()
-	if scene_frame==200 then
-		spider=create_entity("tumble_spider",{})
+	if scene_frame==5 then
+		sfx(24,3)
+	elseif scene_frame==200 then
+		spider=create_entity("tumble_spider")
 	elseif scene_frame==550 then
 		transition_to_scene("scoring")
 	end
@@ -1452,7 +1496,7 @@ end
 -- simulation functions
 function init_simulation()
 	-- reset some vars
-	score,bugs_eaten,entities,new_entities,web_points,web_strands,moving_platforms,spider=0,0,{},{},{},{},{} -- ,nil`
+	score,bugs_eaten,entities,new_entities,web_points,web_strands,moving_platforms,spider=0,0,{},{},{},{},{} -- ,nil
 	-- reset tiles
 	reset_tiles()
 end
@@ -1571,11 +1615,11 @@ function create_entity(class_name,args)
 		entity[k]=v
 	end
 	-- add properties onto it from the arguments
-	for k,v in pairs(args) do
+	for k,v in pairs(args or {}) do
 		entity[k]=v
 	end
 	-- initialize it
-	entity:init(args)
+	entity:init(args or {})
 	-- return it
 	add(new_entities,entity)
 	return entity
@@ -1614,7 +1658,7 @@ function reset_tiles()
 	end
 end
 
-function load_tiles(map,tileset_name)
+function load_tiles(map)
 	local i,c,r
 	-- loop through the 2d array of symbols
 	for c=1,16 do
@@ -1630,17 +1674,12 @@ function load_tiles(map,tileset_name)
 			end
 			-- create the tile if the symbol exists
 			if tile_index then
-				tiles[c*15+r-15]=create_tile(tilesets[tileset_name],tile_index,c,r)
+				tiles[c*15+r-15]=create_tile(tilesets[level_tileset],tile_index,c,r)
+			end
 			-- otherwise we may need to log it as a spawn point
-			elseif symbol=="." then
-				add(level_spawn_points[1],tile_coords)
-			elseif symbol=="+" then
-				add(level_spawn_points[1],tile_coords)
-				add(level_spawn_points[2],tile_coords)
-			elseif symbol=="*" then
-				add(level_spawn_points[1],tile_coords)
-				add(level_spawn_points[2],tile_coords)
-				add(level_spawn_points[3],tile_coords)
+			local i,j=symbol=="*" and 3 or (symbol=="+" and 2 or (symbol=="." and 1 or 0)) -- ,nil
+			for j=1,i do
+				add(level_spawn_points[j],tile_coords)
 			end
 		end
 	end
@@ -1703,7 +1742,7 @@ end
 -- math functions
 function apply_gravity(entity,grav,space_grav,wind_mag)
 	-- some levels have space gravity
-	if level[3]=="world" then
+	if level_tileset=="world" then
 		local square_dist,x,y=calc_square_dist(entity.x,entity.y,63,55),create_vector(63-entity.x,55-entity.y,space_grav)
 		if square_dist>576 then
 			entity.vx+=x
@@ -1714,7 +1753,7 @@ function apply_gravity(entity,grav,space_grav,wind_mag)
 		entity.vy+=grav
 	end
 	-- apply wind
-	if level[3]=="skyscrapers" then
+	if level_tileset=="skyscrapers" then
 		entity.vx+=wind_mag*wind_x
 		entity.vy+=wind_mag*wind_y
 	end
@@ -1728,6 +1767,7 @@ function ceil(n)
 	return -flr(-n)
 end
 
+-- keeps n between min and max by wrapping without remainder
 function wrap_number(min,n,max)
 	return n<min and max or (n>max and min or n)
 end
@@ -1736,20 +1776,25 @@ function create_vector(x,y,magnitude)
 	local length=sqrt(x*x+y*y)
 	if length==0 then
 		return 0,0
-	else
-		return x*magnitude/length,y*magnitude/length
 	end
+	return x*magnitude/length,y*magnitude/length
 end
 
 function calc_square_dist(x1,y1,x2,y2)
 	local dx,dy=x2-x1,y2-y1
 	local square_dist=dx*dx+dy*dy
+	-- if square_dist is negative, then we had overflow
+	-- (note: this doesn't catch every instance of overflow)
 	if square_dist<0 then
-		return 9999
+		-- just return the max possible value
+		return 32767
 	end
 	return square_dist
 end
 
+-- finds the x,y location on a line segment from x1,y1 to x2,y2
+--  that is closest to some point cx,cy. note that this algorithm
+--  returns nil,nil if the closest point would be an endpoint
 function calc_closest_point_on_line(x1,y1,x2,y2,cx,cy)
 	local dx,dy,match_x,match_y=x2-x1,y2-y1 -- ,nil,nil
 	-- if the line is nearly vertical, it's easy
@@ -1771,8 +1816,6 @@ function calc_closest_point_on_line(x1,y1,x2,y2,cx,cy)
 	end
 	if mid(x1,match_x,x2)==match_x and mid(y1,match_y,y2)==match_y then
 		return match_x,match_y
-	else
-		return nil,nil
 	end
 end
 
@@ -1955,12 +1998,12 @@ d7700000007776676005000707007007dddddd0000000000000000000b0000bb000ff000a9900aa9
 00000000000000000080800000808000827282000202020002020200ffeff44fffffffff000000000000000000c0c0000c000c000e0cba800cba98000000cbb0
 00000000000000000000000000000000087800000000000000000000fe4eff4efffeffff00000000000000000e000e00000000000000ba0000098000000e0000
 00000000000000000000000000000000000000020022000000000000ffe44e44fff44eff00000000000000000000000000000000000000000000000000000000
-000000000000000000000000000000000000dd02000444000000dd02ffffe444ef4fefff000000000000000000707000000000000000d0000000000000000000
-00000000000000000099900000999000009942400092442200999d02ffffff4444efffff000000000000000000606000000000000d00d0000000dd0000dd0000
-70aa070000aa000022aaa22022aaa22009aa444009a4420009aaa424fffff444ef2effff007007000000000000eee00076eee67000efe00000efe00000fee000
-0a44a0000a44a0007a444a700a444a0009aa424009aaa9d009aaa444fffff442ffefffff000ee000007ee70000fef00000fef00000eee000002ee0000deefdd0
-0944900079449700092429006924296009aaa90209aaa9d009aaa424fffff44fffffffff000ee000000ee00000eee00000e2e00000efed0000efe00000eee000
-0000000000000000004440007044407000999d020099900000999d02ffff442ffffffeff00000000000000000e000e000e000e0000d00d000d0dd0000000d000
+000000000000000000000000000000000000dd02000444000000dd02ffffe444ef4fefff00000000000000000000000000000000000000000000000000000000
+00000000000000000099900000999000009942400092442200999d02ffffff4444efffff000000000000000007707700000000000d0dd00000ddd00000dd0000
+70aa070000aa000022aaa22022aaa22009aa444009a4420009aaa424fffff444ef2effff007007000000000006eee60007eee70000efe00000efe00000fee000
+0a44a0000a44a0007a444a700a444a0009aa424009aaa9d009aaa444fffff442ffefffff000ee000007ee70000fef00006fef60000eee000002ee0000deefd00
+0944900079449700092429006924296009aaa90209aaa9d009aaa424fffff44fffffffff000ee000000ee00000eee00000e2e00000efed0000efe00000eeed00
+0000000000000000004440007044407000999d020099900000999d02ffff442ffffffeff00000000000000000e000e000e000e0000d0dd000d0dd0000000d000
 0000000000000000040004000400040000000000000000000000dd02fff4f42fffffffff00000000000000000000000000000000000000000000000000000000
 00000000000000000500050005000500000000000000000000000000fff4f42fffffffff00000000000000000000000000000000000000000000000000000033
 005050000050500070aaa07000aaa00000d5a0000dda5a0000500d00ff4f422fffffefff0000000000070000000007000000000000000000000000000000003b
@@ -2071,36 +2114,36 @@ __map__
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __sfx__
-0106000021520215151d5201d5152d0002d0002f0002f0002d0002d0052d0002d00500000000002d0002d0002b0002b0052b0002b00500000000002b0002b0002a0002a0002a0002a000300002f0002d0002b000
-01060000215302b5312b5312b5212b5310d5012900026000215002b5012b5012b5012b5012b50128000240002900024000280000000000000000000000000000000000000000000000000000000000000002d000
-011800000c1400e1411014111141131411514117141181411a1411c1411d1411f1412114123141241412614128141291412b1412d1412f1413014132101341010000000000000000000000000000000000000000
+0106000021510215151d5101d5152d0002d0002f0002f0002d0002d0052d0002d00500000000002d0002d0002b0002b0052b0002b00500000000002b0002b0002a0002a0002a0002a000300002f0002d0002b000
+01060000215202b5212b5212b5112b5110d5012900026000215002b5012b5012b5012b5012b50128000240002900024000280000000000000000000000000000000000000000000000000000000000000002d000
+011800000c1400e1411014111141131411514117141181411a1411c1411d1411f1411f1011f1011f1011f1011f1011f1011f1011f1011f1011f10132101341010000000000000000000000000000000000000000
 010c00001c15024101181010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-010400001856000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-01100000180761c0761f0461f0261f016000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+010600001856000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+01100000180761c0761f0461f0261f015000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 010c0000185551c5551f5501f55000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 010600000c2200c2210c2110c21100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 011000003065024631186210c61100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0102000039640266302d6202661000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+010400002406024000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0108000015410184111a4111c4211d4211e4211f4311f431204312043121431214312143120431204311f4311f4311e4311d4311c4311b4311a43119431184311843117431164311542114421134011840018430
+010b00003047530455304153940039400240000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+011000001c42300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+010300000805008051090510c051110511805121051300510803008031090310c031110311803121031300310801008011090110c01111011180112101130011140001400121001180011d001180012100118001
+01030000176101761115611136211262111621126311363116631196311b6311e6311f63121631226312363125631256312763128631286312962129621296212962129621296112961129611296112961117600
+010300000c0001b6101b6111b6111c6211d6211e6211f6311f6311e6311c6311b631196311763114631116310f6310e6310d6310c6310a6210862107621066210661105611056110461104611046110461104611
+01070000181501814118121181112b1502b1412b1312b1212b1110000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+010600001554000000000001850000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+010c0000185551c5551f5551a5551d555215551c5551f555235552455024551245512453100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+010b000005120021111d0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+011400002b04000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+010900002800028001280502805128051280512605026051240502405124051240412600026001260502605126051260512405024051230502305123051230411f0001f0011f0501f0511f0511f0512305023051
+01090000240502405124051240512605026051260512605126051260211f0002a0002b0002a0502b0502b0512b0512b0512b0512b0511f0001f0001f0001f0001f0001f000000000000000000000000000000000
+010900000d0001f0011f5201f5211f5211f5211f5211f5111f5001f5011f5011f5011f101180011e5201e5211e5211e5211e5211e5111e5001e5011e5011e5011e10117001185201852118521185211852118511
+010900001c5201c5211c5211c5111a5011a5010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+010800000000000000185201852118521185111810118101185201852118521185111810100000175201752117521175111710117101175201752117521175111710100000000000000000000000000000000000
+010800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+010800000000000000180301803118031180310000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -2136,8 +2179,8 @@ __sfx__
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __music__
-00 41424344
-00 41424344
+00 16185a5c
+04 17195b5d
 00 41424344
 00 41424344
 00 41424344
