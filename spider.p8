@@ -1,10 +1,11 @@
 pico-8 cartridge // http://www.pico-8.com
 version 8
 __lua__
-
+--8 legs to love
+--by bridgs
 
 -- set cart data (for saving and loading high scores)
-cartdata("bridgs_8legstolove_1_test2")
+cartdata("bridgs_8legstolove_1")
 
 -- global vars
 local scene
@@ -76,29 +77,15 @@ local entity_classes={
 		vy_strands=0,
 		render_layer=7,
 		mass=4,
-		-- webbing=70,
 		max_webbing=70,
 		facing_x=0,
 		facing_y=1,
 		length_of_spun_web=0,
 		walk_counter=0,
-		-- is_on_tile=false,
-		-- is_on_web=false,
-		-- is_in_freefall=false,
-		-- is_spinning_web=false,
-		-- is_placing_web=false,
-		-- spun_strand=nil,
-		-- moving_platform=nil,
 		frames_of_tile_grace=0,
 		frames_until_spin_web=0,
 		web_uncollision_frames=0,
 		hitstun_frames=0,
-		-- button_left=false,
-		-- button_right=false,
-		-- button_up=false,
-		-- button_down=false,
-		-- button_spin=false,
-		-- button_spin_press=false,
 		instruction_index=1,
 		frames_since_instruction=0,
 		init=function(self)
@@ -357,9 +344,6 @@ local entity_classes={
 		vx_strands=0,
 		vy_strands=0,
 		mass=1,
-		-- has_strands_attached=false,
-		-- caught_bug=nil,
-		-- moving_platform=nil,
 		add_to_game=function(self)
 			add(web_points,self)
 		end,
@@ -397,10 +381,6 @@ local entity_classes={
 		render_layer=4,
 		stretched_length=5,
 		percent_elasticity_remaining=1,
-		-- spring_force=0.25,
-		-- elasticity=1.65,
-		-- base_length=5,
-		-- break_length=25,
 		add_to_game=function(self)
 			add(web_strands,self)
 		end,
@@ -457,9 +437,6 @@ local entity_classes={
 		draw=function(self)
 			if self.frames_to_death<=15 then
 				colorwash(bug_species[self.species][3][1])
-				-- if bug_species[self.species][1]=="butterfly" then
-				-- 	colorwash(({8,9,10,11,12,14})[1+flr(self.frames_alive/2)%6])
-				-- end
 				spr(126-ceil(self.frames_to_death/3),self.x-3,self.y-4)
 				pal()
 			end
@@ -470,9 +447,6 @@ local entity_classes={
 	},
 	bug={
 		render_layer=2,
-		-- is_catchable=false,
-		-- is_consumable=false
-		-- caught_web_point=nil,
 		frames_until_escape=0,
 		vy=0.35,
 		init=function(self)
@@ -525,7 +499,7 @@ local entity_classes={
 								spider.hitstun_frames=25
 							end
 						end
-						sfx(8,2)
+						sfx(8,3)
 						self:die()
 					else
 						self:escape()
@@ -564,7 +538,7 @@ local entity_classes={
 					create_entity("floating_points",props)
 					score+=self.points
 					bugs_eaten+=1
-					sfx(species_name=="butterfly" and 19 or 6,2)
+					sfx(species_name=="butterfly" and 19 or 6,3)
 					self:die()
 				end
 			end
@@ -615,7 +589,7 @@ local entity_classes={
 				self.caught_web_point.caught_bug,self.caught_web_point=nil -- ,nil
 			end
 			self.render_layer,self.frames_to_death,self.vy,self.is_catchable,self.is_consumable=8,12,-1.5 -- ,false,false
-			sfx(20,3)
+			sfx(20,2)
 		end,
 		on_death=function(self)
 			if self.caught_web_point then
@@ -639,6 +613,7 @@ local entity_classes={
 			if self.bug.is_alive and self.bug.caught_web_point and spider and spider.is_alive then
 				local dx,dy=spider.x-self.bug.x,spider.y-self.bug.y
 				local dist=max(1,sqrt(dx*dx+dy*dy))
+				sfx(20,2)
 				create_entity("dragonfly_fireball",{
 					x=self.bug.x,
 					y=self.bug.y,
@@ -657,6 +632,7 @@ local entity_classes={
 			if spider and spider.is_alive and spider.hitstun_frames<=0 and 9>calc_square_dist(self.x,self.y,spider.x,spider.y) then
 				spider.hitstun_frames,spider.vy=25,-1.5
 				spider.vx*=0.5
+				sfx(12,2)
 				self:die()
 			end
 		end,
@@ -805,7 +781,6 @@ local entity_classes={
 		end
 	},
 	buttons={
-		-- frozen=false,
 		button_index=1,
 		init=function(self)
 			self.button_entities={}
@@ -834,7 +809,6 @@ local entity_classes={
 		end
 	},
 	button={
-		-- is_highlighted=false,
 		blink_frames=0,
 		draw=function(self)
 			-- it's fine to decrement this counter in the draw method, since it's draw related
@@ -936,7 +910,7 @@ local entity_classes={
 				})
 				score+=1
 				bugs_eaten+=1
-				sfx(6,2)
+				sfx(6,3)
 				self:die()
 			end
 		end,
@@ -1022,9 +996,6 @@ end
 
 -- title functions
 function update_title()
-	-- if scene_frame==5 then
-	-- 	play title music
-	-- end
 	if btnp(4) and transition_frames_left<=0 then
 		sfx(5,0)
 		transition_to_scene("menu")
@@ -1178,10 +1149,6 @@ function draw_tutorial()
 	camera(0,-8)
 	-- draw the entities and tiles
 	draw_simulation()
-	-- local s="use the arrow keys to move"
-	-- local s="hold z to spin a strand of web. the longer you hold, the longer the strand"
-	-- color(7)
-	-- print(s,64-2*#s,10)
 end
 
 
@@ -1235,7 +1202,6 @@ function init_game()
 		respawn_y=level[2],
 		y=level_num==6 and 30 or 46
 	})
-	-- spider=create_entity("spider",{x=level[1],y=level[2],respawn_x=level[1],respawn_y=level[2]})
 	if level_tileset=="construction" then
 		create_entity("moving_platform",{x=52,y=32})
 	elseif level_tileset=="skyscrapers" then
@@ -1475,18 +1441,18 @@ end
 
 function update_ending()
 	update_simulation()
-	if scene_frame==5 then
-		sfx(24,3)
-	elseif scene_frame==200 then
+	if scene_frame==40 then
+		music(2)
+	elseif scene_frame==300 then
 		spider=create_entity("tumble_spider")
-	elseif scene_frame==550 then
+	elseif scene_frame==625 then
 		transition_to_scene("scoring")
 	end
 end
 
 function draw_ending()
 	draw_simulation()
-	if scene_frame>100 then
+	if scene_frame>230 then
 		print("thanks for playing!",23,20,7)
 		spr(24,99,18)
 	end
@@ -1555,7 +1521,7 @@ function draw_simulation()
 	foreach(tiles,function(tile)
 		if tile then
 			spr(tile.sprite,8*tile.col-8,8*tile.row-8,1,1,tile.is_flipped)
-			-- uncomment to see terrain "hitboxes"
+			-- show terrain "hitboxes"
 			-- if scene_frame%16<8 then
 			-- 	local x=8*tile.col-8
 			-- 	local y=8*tile.row-8
@@ -1620,8 +1586,9 @@ function create_entity(class_name,args)
 	end
 	-- initialize it
 	entity:init(args or {})
-	-- return it
+	-- add it to the list of entities-to-be-added
 	add(new_entities,entity)
+	-- return it
 	return entity
 end
 
@@ -1892,7 +1859,7 @@ end
 
 function increment_looping_counter(n)
 	if n>32000 then
-		n-=10000
+		return 20000
 	end
 	return n+1
 end
@@ -2140,11 +2107,11 @@ __sfx__
 01090000240502405124051240512605026051260512605126051260211f0002a0002b0002a0502b0502b0512b0512b0512b0512b0511f0001f0001f0001f0001f0001f000000000000000000000000000000000
 010900000d0001f0011f5201f5211f5211f5211f5211f5111f5001f5011f5011f5011f101180011e5201e5211e5211e5211e5211e5111e5001e5011e5011e5011e10117001185201852118521185211852118511
 010900001c5201c5211c5211c5111a5011a5010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-010800000000000000185201852118521185111810118101185201852118521185111810100000175201752117521175111710117101175201752117521175111710100000000000000000000000000000000000
-010800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-010800000000000000180301803118031180310000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+01160000237522375223742237221f7521f7521f7421f7221c7521c7521c7521c7421c7221c7121750017501217522175221742217221d7521d7521d7421d7221a7521a7521a7521a7421a7221a7120000000000
+011600001877018770187601876018750187511875118751187511875118751187511875118751187511875118751187511875118741187411873118731187211872118711187111871500000000000000000000
+0116000000000000001800018001175201752117521175111a5201a5211a5211a5211a5211a5211a5111a51500000000000000000000155201552115521155111852018521185211852118521185211851118515
+0116000000000000001f0001c00010550105411053110531105311053110531105311053110531105311053110531105311053110531105311053110521105211051110511000000000000000000000000000000
+01160000000000000000000000001f5001f5011f5001f501135501354113531135311353113531135311353113531135311353113531135211352113511135111f5011f5011f5010000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -2181,8 +2148,8 @@ __sfx__
 __music__
 00 16185a5c
 04 17195b5d
-00 41424344
-00 41424344
+00 1a1c5e60
+04 1b1d1e61
 00 41424344
 00 41424344
 00 41424344
