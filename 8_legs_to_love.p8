@@ -4,10 +4,8 @@ __lua__
 --8 legs to love
 --by bridgs
 
--- set cart data (for saving and loading high scores)
 cartdata("bridgs_8legstolove_1")
 
--- global vars
 local scene
 local next_scene
 local transition_frames_left=0
@@ -35,9 +33,7 @@ local wind_x
 local wind_y
 local menu_buttons
 local is_story_mode
--- local debug_text
 
--- constants
 local tile_flip_matrix={8,4,2,1,128,64,32,16}
 local scenes={}
 local levels={
@@ -920,18 +916,11 @@ local entity_classes={
 	}
 }
 
-
--- main functions
 function _init()
 	init_scene("title")
 end
 
--- local frame_skip=0
 function _update()
-	-- frame_skip=increment_looping_counter(frame_skip)
-	-- if frame_skip%4>0 then
-	-- 	return
-	-- end
 	if transition_frames_left>0 then
 		transition_frames_left=decrement_counter(transition_frames_left)
 		if transition_frames_left==30 then
@@ -945,20 +934,6 @@ end
 function _draw()
 	camera()
 	rectfill(0,0,127,127,0)
-	-- draw guidelines
-	-- color(1)
-	-- line(0,0,0,127)
-	-- line(31,0,31,127)
-	-- line(62,0,62,127)
-	-- line(65,0,65,127)
-	-- line(96,0,96,127)
-	-- line(127,0,127,127)
-	-- line(0,0,127,0)
-	-- line(0,62,127,62)
-	-- line(0,31,127,31)
-	-- line(0,96,127,96)
-	-- line(0,65,127,65)
-	-- line(0,127,127,127)
 	-- draw the scene
 	scenes[scene][3]()
 	-- draw the scene transition
@@ -980,21 +955,8 @@ function _draw()
 			end
 		end
 	end
-	-- draw debug stats
-	-- camera()
-	-- color(15)
-	-- print("entities: "..#entities,2,110)
-	-- print("memory:   "..flr(stat(0)*(100/1024)).."%",2,116)
-	-- print("cpu:      "..flr(100*stat(1)).."%",2,122)
-	-- draw debug text
-	-- if debug_text then
-	-- 	rectfill(0,121,4*#debug_text,128,0)
-	-- 	print(debug_text,1,122,8)
-	-- end
 end
 
-
--- title functions
 function update_title()
 	if btnp(4) and transition_frames_left<=0 then
 		sfx(5,0)
@@ -1012,8 +974,6 @@ function draw_title()
 	end
 end
 
-
--- menu functions
 function init_menu()
 	init_simulation()
 	menu_buttons=create_entity("buttons",{
@@ -1151,8 +1111,6 @@ function draw_tutorial()
 	draw_simulation()
 end
 
-
--- level select functions
 function init_level_select()
 	init_simulation()
 	menu_buttons=create_entity("buttons",{
@@ -1186,8 +1144,6 @@ function draw_level_select()
 	print("select a level",36,10,7)
 end
 
-
--- game functions
 function init_game()
 	local i
 	-- reset entities, tiles, and variables
@@ -1318,8 +1274,6 @@ function draw_game()
 	print(score_cumulative+score<=0 and "0" or (score_cumulative+score).."0",1,2,7)
 end
 
-
--- scoring functions
 function init_scoring()
 	score_cumulative+=score
 	-- save level high score
@@ -1401,8 +1355,6 @@ function draw_scoring()
 	end
 end
 
-
--- credits functions
 function update_credits()
 	if scene_frame>7 and (btnp(4) or btnp(5)) then
 		sfx(4,0)
@@ -1417,8 +1369,7 @@ function draw_credits()
 	print("your high scores",32,44)
 	print("press z to return",30,110)
 	color(13)
-	print("http://brid.gs",36,20)
-	print("@bridgs_dev",42,27)
+	print("http://aylanonsen.se",24,20)
 	local i
 	for i=1,7 do
 		local s=dget(i==7 and 0 or i)
@@ -1428,8 +1379,6 @@ function draw_credits()
 	end
 end
 
-
--- ending functions
 function init_ending()
 	level_num=-1
 	init_simulation()
@@ -1458,8 +1407,6 @@ function draw_ending()
 	end
 end
 
-
--- simulation functions
 function init_simulation()
 	-- reset some vars
 	score,bugs_eaten,entities,new_entities,web_points,web_strands,moving_platforms,spider=0,0,{},{},{},{},{} -- ,nil
@@ -1552,8 +1499,6 @@ function draw_simulation()
 	end
 end
 
-
--- entity functions
 function create_entity(class_name,args)
 	-- create default entity
 	local entity,k,v={
@@ -1615,8 +1560,6 @@ function spawn_bugs(bug_species_index,num_bugs)
 	end
 end
 
-
--- tile functions
 function reset_tiles()
 	local i
 	tiles,level_spawn_points={},{{},{},{}}
@@ -1705,8 +1648,6 @@ function is_solid_tile_at(x,y)
 	return false
 end
 
-
--- math functions
 function apply_gravity(entity,grav,space_grav,wind_mag)
 	-- some levels have space gravity
 	if level_tileset=="world" then
@@ -1773,7 +1714,6 @@ function calc_closest_point_on_line(x1,y1,x2,y2,cx,cy)
 	--otherwise we have a bit of math to do...
 	else
 		-- find equation of the line y=mx+b
-		-- find reverse equation from circle
 		local m,m2=dy/dx,-dx/dy
 		local b,b2=y1-m*x1,cy-m2*cx -- b=y-mx
 		-- figure out where their y-values are the same
@@ -1786,8 +1726,6 @@ function calc_closest_point_on_line(x1,y1,x2,y2,cx,cy)
 	end
 end
 
-
--- web functions
 function calc_closest_web_point(x,y,allow_unanchored,allow_occupied)
 	local closest_square_dist,closest_web_point=9999 -- ,nil
 	foreach(web_points,function(web_point)
@@ -1825,8 +1763,6 @@ function calc_closest_spot_on_web(x,y,allow_unanchored)
 	return closest_x,closest_y,closest_square_dist
 end
 
-
--- helper functions
 function noop() end
 
 function draw_corners()
@@ -1845,10 +1781,6 @@ function init_scene(s)
 	scene,scene_frame,next_scene=s,0 -- ,nil
 	scenes[scene][1]()
 end
-
--- function debug_print(s)
--- 	debug_text="> " .. (s==nil and "nil" or s)
--- end
 
 function transition_to_scene(s)
 	next_scene=s
@@ -1901,8 +1833,6 @@ function extract_props(obj,props_names)
 	return props
 end
 
-
--- set up the scenes now that the functions are defined
 scenes={
 	title={noop,update_title,draw_title},
 	menu={init_menu,update_menu,draw_menu},
