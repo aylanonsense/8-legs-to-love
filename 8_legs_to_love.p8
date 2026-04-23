@@ -1369,7 +1369,7 @@ function draw_credits()
 	print("your high scores",32,44)
 	print("press z to return",30,110)
 	color(13)
-	print("http://aylanonsen.se",24,20)
+	print("https://aylanonsen.se",22,20)
 	local i
 	for i=1,7 do
 		local s=dget(i==7 and 0 or i)
